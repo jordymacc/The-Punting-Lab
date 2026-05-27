@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Horse Racing Overlay</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="header-inner">
+            <h1>🏇 Horse Racing Overlay</h1>
+            <div class="status-bar">
+                <span id="status-dot" class="dot grey"></span>
+                <span id="status-text">Connecting...</span>
+                <span id="last-updated"></span>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Summary Cards -->
+        <section class="summary-cards">
+            <div class="card">
+                <div class="card-label">Races Loaded</div>
+                <div class="card-value" id="races-count">--</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Runners</div>
+                <div class="card-value" id="runners-count">--</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Strong Value</div>
+                <div class="card-value highlight" id="strong-count">--</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Good Value</div>
+                <div class="card-value highlight-good" id="good-count">--</div>
+            </div>
+        </section>
+
+        <!-- Next Race Countdown -->
+        <section class="next-race-banner" id="next-race-banner" style="display:none">
+            <div class="next-race-inner">
+                <span class="next-race-label">NEXT RACE</span>
+                <span class="next-race-name" id="next-race-name">--</span>
+                <span class="next-race-countdown" id="next-race-countdown">--:--</span>
+            </div>
+        </section>
+
+        <!-- Filters -->
+        <section class="filters">
+            <label>Rating:
+                <select id="filter-rating">
+                    <option value="ALL">All</option>
+                    <option value="STRONG">Strong</option>
+                    <option value="GOOD">Good</option>
+                    <option value="MARGINAL">Marginal</option>
+                    <option value="N/A">No Odds</option>
+                </select>
+            </label>
+            <label>Track:
+                <select id="filter-track">
+                    <option value="ALL">All Tracks</option>
+                </select>
+            </label>
+            <label>Sort by:
+                <select id="filter-sort">
+                    <option value="fair_value">Fair Value %</option>
+                    <option value="overlay_score">Overlay Score</option>
+                    <option value="track_wins">Track Win %</option>
+                </select>
+            </label>
+            <button id="refresh-btn" onclick="fetchData()">🔄 Refresh</button>
+        </section>
+        <!-- Best Bets -->
+        <section class="best-bets-section" id="best-bets-section" style="display:none">
+            <h2>⭐ Today's Best Bets</h2>
+            <div id="best-bets-grid" class="best-bets-grid"></div>
+        </section>
+        <!-- Race Cards View -->
+        <section class="table-section">
+            <h2>Runner Rankings</h2>
+            <div id="race-cards-container"></div>
+        </section>
+
+        <!-- Weather Section -->
+        <section class="weather-section">
+            <h2>Track Weather</h2>
+            <div id="weather-grid" class="weather-grid">
+                <p class="loading">Loading weather...</p>
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js?v=5"></script>
+</html>
