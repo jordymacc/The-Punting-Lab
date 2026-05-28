@@ -655,3 +655,96 @@ tbody tr.rank-3:hover { background: #1c1710; }
 .race-block.resulted-race .race-block-header {
     background: #13151f;
 }
+/* ---------- Model Accuracy ---------- */
+.accuracy-section h2 {
+    font-size: 1rem;
+    color: #2a9d8f;
+    margin-bottom: 14px;
+    border-left: 3px solid #2a9d8f;
+    padding-left: 10px;
+}
+
+.accuracy-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.accuracy-card {
+    background: #1a1d2e;
+    border: 1px solid #2a2d3e;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+}
+
+.accuracy-label {
+    font-size: 0.72rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+.accuracy-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #e0e0e0;
+}
+
+.accuracy-value.highlight { color: #2a9d8f; }
+.accuracy-value.highlight-good { color: #f4a261; }
+
+.accuracy-table-wrapper {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid #2a2d3e;
+}
+
+.accuracy-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.accuracy-table thead tr {
+    background: #1a1d2e;
+    color: #666;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    letter-spacing: 0.5px;
+}
+
+.accuracy-table th,
+.accuracy-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid #1e2130;
+    white-space: nowrap;
+}
+
+.accuracy-table tbody tr {
+    background: #13151f;
+    transition: background 0.15s;
+}
+
+.accuracy-table tbody tr:hover { background: #1a1d2e; }
+
+.result-win {
+    color: #2a9d8f;
+    font-weight: 700;
+}
+
+.result-place {
+    color: #f4a261;
+    font-weight: 600;
+}
+
+.result-loss {
+    color: #555;
+}
+
+@media (max-width: 768px) {
+    .accuracy-cards { grid-template-columns: repeat(2, 1fr); }
+}

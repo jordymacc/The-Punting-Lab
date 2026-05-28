@@ -73,6 +73,47 @@
             </label>
             <button id="refresh-btn" onclick="fetchData()">🔄 Refresh</button>
         </section>
+        <!-- Model Accuracy -->
+        <section class="accuracy-section" id="accuracy-section" style="display:none">
+            <h2>📊 Model Accuracy</h2>
+            <div class="accuracy-cards">
+                <div class="accuracy-card">
+                    <div class="accuracy-label">Races Tracked</div>
+                    <div class="accuracy-value" id="acc-total">--</div>
+                </div>
+                <div class="accuracy-card">
+                    <div class="accuracy-label">Top Pick Wins</div>
+                    <div class="accuracy-value highlight" id="acc-wins">--</div>
+                </div>
+                <div class="accuracy-card">
+                    <div class="accuracy-label">Win Rate</div>
+                    <div class="accuracy-value highlight" id="acc-winrate">--%</div>
+                </div>
+                <div class="accuracy-card">
+                    <div class="accuracy-label">Place Rate</div>
+                    <div class="accuracy-value highlight-good" id="acc-placerate">--%</div>
+                </div>
+            </div>
+            <div class="accuracy-table-wrapper">
+                <table class="accuracy-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Track</th>
+                            <th>Race</th>
+                            <th>Model Pick</th>
+                            <th>Winner</th>
+                            <th>2nd</th>
+                            <th>3rd</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accuracy-tbody">
+                        <tr><td colspan="8" class="loading">No results recorded yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
         <!-- Best Bets -->
         <section class="best-bets-section" id="best-bets-section" style="display:none">
             <h2>⭐ Today's Best Bets</h2>
@@ -93,5 +134,5 @@
         </section>
     </main>
 
-    <script src="app.js?v=5"></script>
+    <script src="app.js?v=7"></script>
 </html>

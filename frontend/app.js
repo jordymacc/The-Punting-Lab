@@ -61,11 +61,12 @@ function fetchData() {
         .catch(function() {});
 
     fetch(API + "/api/status")
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            document.getElementById("races-count").textContent = d.races_loaded || 0;
-        })
-        .catch(function() {});
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                document.getElementById("races-count").textContent = d.races_loaded || 0;
+            })
+            .catch(function() {})
+            loadAccuracy();
 
     fetch(API + "/api/races")
         .then(function(r) { return r.json(); })
@@ -73,7 +74,56 @@ function fetchData() {
         .catch(function() {});
 }
 
-function loadResultsFromDB() {
+function loadResultsFromDB()
+function loadAccuracy() {
+    fetch(API + "/api/accuracy")
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            var section = document.getElementById("accuracy-section");
+            if (d.total_races > 0) {
+                section.style.display = "block";
+                document.getElementById("acc-total").textContent = d.total_races;
+                document.getElementById("acc-wins").textContent = d.wins;
+                document.getElementById("acc-winrate").textContent = d.win_rate + "%";
+                document.getElementById("acc-placerate").textContent = d.place_rate + "%";
+            }
+        })
+        .catch(function() {});
+
+    fetch(API + "/api/results")
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            var results = d.results || [];
+            var tbody = document.getElementById("accuracy-tbody");
+            if (!results.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="loading">No results recorded yet.</td></tr>';
+                return;
+            }
+            var section = document.getElementById("accuracy-section");
+            section.style.display = "block";
+            var html = "";
+            for (var i = 0; i < results.length; i++) {
+                var r = results[i];
+                var resultClass = r.model_top_pick_won ? "result-win" :
+                                  r.model_top_pick_placed ? "result-place" : "result-loss";
+                var resultText = r.model_top_pick_won ? "✅ WIN" :
+                                 r.model_top_pick_placed ? "📍 PLACE" :
+                                 r.model_top_pick ? "❌ LOSS" : "—";
+                html += '<tr>' +
+                    '<td>' + (r.race_date || "--") + '</td>' +
+                    '<td>' + (r.track || "--") + '</td>' +
+                    '<td>R' + (r.race_number || "--") + '</td>' +
+                    '<td><strong>' + (r.model_top_pick || "--") + '</strong></td>' +
+                    '<td class="result-win">' + (r.winner || "--") + '</td>' +
+                    '<td style="color:#c0c0c0">' + (r.second || "--") + '</td>' +
+                    '<td style="color:#cd7f32">' + (r.third || "--") + '</td>' +
+                    '<td class="' + resultClass + '">' + resultText + '</td>' +
+                    '</tr>';
+            }
+            tbody.innerHTML = html;
+        })
+        .catch(function() {});
+} {
     fetch(API + "/api/results")
         .then(function(r) { return r.json(); })
         .then(function(data) {
