@@ -2,20 +2,7 @@
 
 A comprehensive horse racing analysis and overlay system with web scraping, data analysis, and visualization capabilities.
 
-## Project Structure
-
-```
-├── backend/
-│   └── backend-new/          # Main backend application
-│       ├── main.py           # Entry point
-│       ├── scraper.py        # Web scraping logic
-│       ├── agents.py         # Agent-based analysis
-│       ├── database.py       # Database operations
-│       ├── overlay_model.py  # Overlay data model
-│       ├── weather.py        # Weather data integration
-│       └── requirements.txt  # Python dependencies
-└── README.md
-```
+**Live Backend:** https://punting-lab-backend.onrender.com/
 
 ## Quick Start
 
@@ -25,59 +12,34 @@ A comprehensive horse racing analysis and overlay system with web scraping, data
 
 ### Installation
 
-1. Clone the repository:
-```bash
-git clone https://github.com/jordymacc/The-Punting-Lab.git
-cd The-Punting-Lab
-```
+1. Clone: `git clone https://github.com/jordymacc/The-Punting-Lab.git`
+2. Setup virtual environment: `python -m venv .venv`
+3. Install dependencies: `pip install -r backend/backend-new/requirements.txt`
 
-2. Create a virtual environment:
-```bash
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
+### Running
 
-3. Install dependencies:
 ```bash
 cd backend/backend-new
-pip install -r requirements.txt
-```
-
-### Running the Application
-
-```bash
 python main.py
 ```
 
+## API Documentation
+
+- Live Docs: https://punting-lab-backend.onrender.com/docs
+- ReDoc: https://punting-lab-backend.onrender.com/redoc
+
 ## Features
 
-- **Web Scraping**: Automated scraping of horse racing data from multiple sources
-- **Data Analysis**: Agent-based analysis system for race predictions
-- **Weather Integration**: Real-time weather data for race conditions
-- **Database**: SQLite database for storing historical data
-- **Overlay Model**: Data visualization and overlay capabilities
+- Web Scraping of horse racing data
+- Agent-based analysis system
+- Weather integration
+- SQLite database for historical data
+- REST API with FastAPI
 
-## Development
+## Tech Stack
 
-### Project Dependencies
+- FastAPI, SQLAlchemy, Playwright, Pydantic, Uvicorn
 
-See `backend/backend-new/requirements.txt` for all dependencies.
+## Status
 
-### Database
-
-The application uses SQLite (`racing.db`) to store historical race data.
-
-## Contributing
-
-1. Create a new branch for your feature
-2. Make your changes
-3. Test thoroughly
-4. Submit a pull request
-
-## License
-
-[Add your license here]
-
-## Author
-
-Jordan Macc
+🟢 Backend Live on Render | 🟡 Frontend In Development
