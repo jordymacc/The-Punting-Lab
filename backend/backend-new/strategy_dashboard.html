@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Betting Strategy Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .card { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .strategy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .bet-recommendation { padding: 15px; margin: 10px 0; border-left: 4px solid #2196f3; background: #f9f9f9; border-radius: 4px; }
+        .bet-recommendation.high-risk { border-left-color: #f44336; }
+        .bet-recommendation.medium-risk { border-left-color: #ff9800; }
+        .bet-recommendation.low-risk { border-left-color: #4caf50; }
+        .bankroll-info { background: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .strategy-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 20px; }
+        .metric { text-align: center; padding: 15px; background: #e3f2fd; border-radius: 8px; }
+        .btn { padding: 10px 20px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .btn:hover { background: #1976d2; }
+        .race-input { margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 100%; }
+        .reasoning { font-style: italic; color: #666; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 AI Betting Strategy Dashboard</h1>
+        
+        <!-- Bankroll Management -->
+        <div class="card">
+            <h2>💰 Bankroll Management</h2>
+            <div class="bankroll-info" id="bankroll-info">
+                Loading bankroll information...
+            </div>
+            <input type="number" id="bankroll-input" placeholder="Enter your bankroll amount" class="race-input">
+            <button class="btn" onclick="updateBankroll()">Update Bankroll</button>
+        </div>
+        
+        <!-- Race Analysis -->
+        <div class="card">
+            <h2>📊 Race Strategy Analysis</h2>
+            <div class="strategy-grid">
+                <div>
+                    <h3>Analyze New Race</h3>
+                    <textarea id="race-data-input" class="race-input" rows="10" 
+                              placeholder='Enter race data in JSON format:
+{
+  "race_id": "R1_FLM_2024-01-15",
+  "track": "Flemington",
+  "race_time": "2024-01-15T14:30:00",
+  "race_type": "handicap",
+  "distance": 1600,
+  "surface": "turf",
+  "weather": "fine",
+  "field_size": 12,
+  "predicted_winner": "Thunder Bolt",
+  "horses": [
+    {
+      "horse_name": "Thunder Bolt",
+      "predicted_odds": 4.5,
+      "bookmaker_odds": 6.0,
+      "overlay_value": 0.33,
+      "confidence": 0.85,
+      "predicted_finish": 1
+    }
+  ]
+}'></textarea>
+                    <button class="btn" onclick="analyzeRace()">Analyze Race Strategy</button>
+                </div>
+                
+                <div>
+                    <h3>Strategy Results</h3>
+                    <div id="strategy-results">
+                        Enter race data and click "Analyze Race Strategy" to get betting recommendations.
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Performance Summary -->
+        <div class="card">
+            <h2>📈 Strategy Performance</h2>
+            <div id="performance-summary">
+                Loading performance data...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://punting-lab-backend.onrender.com';  // Update with your URL
+        
+        async function loadDashboard() {
+            await loadBankrollInfo();
+            await loadPerformanceSummary();
+        }
+        
+        async function loadBankrollInfo() {
+            try {
+                const response = await fetch(`${API_BASE}/strategy/bankroll-advice`);
+                const data = await response.json();
+                displayBankrollInfo(data);
+            } catch (error) {
+                document.getElementById('bankroll-info').innerHTML = 
+                    '<span style="color: red;">Failed to load bankroll information</span>';
+            }
+        }
+        
+        function displayBankrollInfo(data) {
+            const trend = data.bankroll_trend;
+            const trendColor = trend === 'growing' ? 'green' : trend === 'declining' ? 'red' : 'orange';
+            
+            let html = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div>
+                        <strong>Current Bankroll:</strong> $${data.current_bankroll.toFixed(2)}
+                    </div>
+                    <div>
+                        <strong>Daily Limit:</strong> $${data.recommended_daily_limit.toFixed(2)}
+                    </div>
+                    <div>
+                        <strong>Recent ROI:</strong> ${data.recent_performance.toFixed(2)}%
+                    </div>
+                    <div>
+                        <strong>Trend:</strong> <span style="color: ${trendColor}; font-weight: bold;">${trend.toUpperCase()}</span>
+                    </div>
+                </div>
+            `;
+            
+            if (data.recommendations && data.recommendations.length > 0) {
+                html += '<div style="margin-top: 15px;"><strong>Recommendations:</strong><ul>';
+                data.recommendations.forEach(rec => {
+                    html += `<li>${rec}</li>`;
+                });
+                html += '</ul></div>';
+            }
+            
+            document.getElementById('bankroll-info').innerHTML = html;
+        }
+        
+        async function updateBankroll() {
+            const amount = parseFloat(document.getElementById('bankroll-input').value);
+            if (!amount || amount <= 0) {
+                alert('Please enter a valid bankroll amount');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/strategy/set-bankroll`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({amount: amount})
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert(`Bankroll updated to $${result.new_bankroll}`);
+                    await loadBankrollInfo();
+                    document.getElementById('bankroll-input').value = '';
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (error) {
+                alert('Failed to update bankroll');
+            }
+        }
+        
+        async function analyzeRace() {
+            const raceDataText = document.getElementById('race-data-input').value;
+            if (!raceDataText.trim()) {
+                alert('Please enter race data');
+                return;
+            }
+            
+            try {
+                const raceData = JSON.parse(raceDataText);
+                
+                const response = await fetch(`${API_BASE}/strategy/analyze-race`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(raceData)
+                });
+                
+                const strategy = await response.json();
+                displayStrategyResults(strategy);
+                
+            } catch (error) {
+                alert('Error analyzing race: ' + error.message);
+            }
+        }
+        
+        function displayStrategyResults(strategy) {
+            if (strategy.error) {
+                document.getElementById('strategy-results').innerHTML = 
+                    `<div style="color: red;">Error: ${strategy.error}</div>`;
+                return;
+            }
+            
+            let html = `
+                <div class="strategy-summary">
+                    <div class="metric">
+                        <div style="font-size: 18px; font-weight: bold;">$${strategy.total_recommended_outlay.toFixed(2)}</div>
+                        <div>Total Outlay</div>
+                    </div>
+                    <div class="metric">
+                        <div style="font-size: 18px; font-weight: bold;">${strategy.number_of_bets}</div>
+                        <div>Recommended Bets</div>
+                    </div>
+                    <div class="metric">
+                        <div style="font-size: 18px; font-weight: bold;">${strategy.expected_roi.toFixed(1)}%</div>
+                        <div>Expected ROI</div>
+                    </div>
+                    <div class="metric">
+                        <div style="font-size: 18px; font-weight: bold;">${strategy.risk_assessment}</div>
+                        <div>Risk Level</div>
+                    </div>
+                </div>
+                
+                <h4>Individual Betting Recommendations:</h4>
+            `;
+            
+            if (strategy.recommendations && strategy.recommendations.length > 0) {
+                strategy.recommendations.forEach(rec => {
+                    html += `
+                        <div class="bet-recommendation ${rec.risk_rating.toLowerCase()}-risk">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                                <div>
+                                    <strong>${rec.horse_name}</strong><br>
+                                    <span style="font-size: 12px; color: #666;">${rec.bet_type.toUpperCase()}</span>
+                                </div>
+                                <div>
+                                    <strong>Stake: $${rec.recommended_stake.toFixed(2)}</strong><br>
+                                    <span style="font-size: 12px;">Max: $${rec.max_stake.toFixed(2)}</span>
+                                </div>
+                                <div>
+                                    <strong>Risk: ${rec.risk_rating}</strong><br>
+                                    <span style="font-size: 12px;">Overlay: ${(rec.overlay_value * 100).toFixed(1)}%</span>
+                                </div>
+                            </div>
+                            <div class="reasoning">${rec.reasoning}</div>
+                        </div>
+                    `;
+                });
+            } else {
+                html += '<div>No betting recommendations for this race.</div>';
+            }
+            
+            document.getElementById('strategy-results').innerHTML = html;
+        }
+        
+        async function loadPerformanceSummary() {
+            try {
+                const response = await fetch(`${API_BASE}/strategy/performance-summary`);
+                const data = await response.json();
+                
+                const overall = data.overall_performance;
+                if (overall.error) {
+                    document.getElementById('performance-summary').innerHTML = 
+                        '<div>No performance data available yet. Start making predictions to see strategy effectiveness.</div>';
+                    return;
+                }
+                
+                const html = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div class="metric">
+                            <div style="font-size: 18px; font-weight: bold;">${(overall.win_accuracy * 100).toFixed(1)}%</div>
+                            <div>Win Accuracy</div>
+                        </div>
+                        <div class="metric">
+                            <div style="font-size: 18px; font-weight: bold;">${overall.average_roi.toFixed(2)}%</div>
+                            <div>Average ROI</div>
+                        </div>
+                        <div class="metric">
+                            <div style="font-size: 18px; font-weight: bold;">${(overall.profitable_rate * 100).toFixed(1)}%</div>
+                            <div>Profitable Rate</div>
+                        </div>
+                        <div class="metric">
+                            <div style="font-size: 18px; font-weight: bold;">${overall.total_predictions}</div>
+                            <div>Total Bets</div>
+                        </div>
+                    </div>
+                    
+                    <h4>Strategy Recommendations:</h4>
+                    <ul>
+                        <li><strong>Conservative:</strong> ${data.strategy_recommendations.conservative_situations}</li>
+                        <li><strong>Aggressive:</strong> ${data.strategy_recommendations.aggressive_situations}</li>
+                        <li><strong>Value Hunting:</strong> ${data.strategy_recommendations.value_hunting_situations}</li>
+                    </ul>
+                `;
+                
+                document.getElementById('performance-summary').innerHTML = html;
+                
+            } catch (error) {
+                document.getElementById('performance-summary').innerHTML = 
+                    '<div style="color: red;">Failed to load performance summary</div>';
+            }
+        }
+        
+        // Load dashboard on page load
+        loadDashboard();
+    </script>
+</body>
+</html>
