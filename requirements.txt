@@ -45,3 +45,4 @@ structlog==23.2.0
 
 # Strategy Engine Dependencies
 python-dotenv==1.0.0
+httpx==0.28.1
