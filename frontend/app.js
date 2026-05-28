@@ -1,4 +1,4 @@
-const API = "http://localhost:8000";
+const API = "https://punting-lab-backend.onrender.com";
 let allOverlays = [];
 let allRaces = [];
 let ws = null;
