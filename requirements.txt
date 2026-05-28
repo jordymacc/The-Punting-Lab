@@ -1,5 +1,5 @@
 aiofiles==25.1.0
-aiohappyeyeballs==2.6.2
+aiohappyeyeballs>=0.9.0,<2.6
 aiohttp==3.13.5
 aiosignal==1.4.0
 annotated-doc==0.0.4
