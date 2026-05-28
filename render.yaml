@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: punting-lab-backend
+    runtime: python
+    pythonVersion: "3.11"
+    buildCommand: pip install -r backend/backend-new/requirements.txt && playwright install chromium
+    startCommand: cd backend/backend-new && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
