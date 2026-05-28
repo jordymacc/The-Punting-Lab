@@ -1,3 +1,4 @@
+from config import config
 import asyncio
 import json
 import uvicorn
@@ -38,6 +39,10 @@ async def css():
 @app.get("/app.js")
 async def js():
     return FileResponse(FRONTEND / "app.js", media_type="application/javascript")
+
+@app.get("/bulk", response_class=HTMLResponse)
+async def bulk_page():
+    return FileResponse(FRONTEND / "bulk.html")
 
 @app.get("/api/races")
 async def get_races():
@@ -229,4 +234,4 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("main:app", host=config.HOST, port=config.PORT, reload=config.RELOAD)
