@@ -94,6 +94,63 @@ async def inspect_api_response(date_str: str):
     print("=" * 50)
 
 
+async def inspect_web_results(date_str: str):
+    import aiohttp
+    import re
+
+    url = f"https://www.racingpost.com/results/{date_str}/au"
+    print(f"\n🔍 INSPECTING WEB RESULTS FOR {date_str}")
+    print(f"📍 URL: {url}")
+    print("-" * 50)
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                print(f"Status: {resp.status}")
+                if resp.status != 200:
+                    print("❌ Could not fetch page")
+                else:
+                    html = await resp.text()
+                    print(f"Page length: {len(html)} chars")
+
+                    with open("debug_results_page.html", "w", encoding="utf-8") as f:
+                        f.write(html)
+                    print("✅ Saved to debug_results_page.html")
+
+                    keywords = [
+                        "1st", "2nd", "3rd",
+                        "winner", "placed", "finished",
+                        "result", "position",
+                        "finishing", "first-past",
+                    ]
+                    for kw in keywords:
+                        matches = [m.start() for m in re.finditer(kw, html, re.IGNORECASE)]
+                        if matches:
+                            print(f"  🔎 '{kw}' found {len(matches)} times")
+                            pos = matches[0]
+                            snippet = html[max(0, pos - 50):pos + 80].replace("\n", " ")
+                            print(f"     → ...{snippet}...")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+    url2 = f"https://www.racing.com/results/{date_str}"
+    print(f"\n📍 Also trying: {url2}")
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url2, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                print(f"Status: {resp.status}")
+                if resp.status == 200:
+                    html2 = await resp.text()
+                    print(f"Page length: {len(html2)} chars")
+                    with open("debug_racing_com.html", "w", encoding="utf-8") as f:
+                        f.write(html2)
+                    print("✅ Saved to debug_racing_com.html")
+                else:
+                    print("❌ Could not fetch")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+
 async def extract_results(form_data: dict) -> dict:
     runners = form_data.get("runners", [])
     if not runners:
@@ -328,17 +385,17 @@ if __name__ == "__main__":
         date_str = (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
         asyncio.run(inspect_api_response(date_str))
 
+    elif len(sys.argv) > 1 and sys.argv[1] == "inspect-web":
+        days_ago = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+        date_str = (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+        asyncio.run(inspect_web_results(date_str))
+
     elif len(sys.argv) > 1 and sys.argv[1] == "backfill":
         days = int(sys.argv[2]) if len(sys.argv) > 2 else 7
         asyncio.run(backfill_history(days))
 
     else:
         print("Usage:")
-        print("  python scrape_historical.py inspect [days_ago]")
-        print("  python scrape_historical.py backfill [days]")
-        print()
-        print("Examples:")
-        print("  python scrape_historical.py inspect 1")
-        print("  python scrape_historical.py inspect 3")
-        print("  python scrape_historical.py backfill 7")
-        print("  python scrape_historical.py backfill 14")
+        print("  python scrape_historical.py inspect [days_ago]      # Inspect FormFav API")
+        print("  python scrape_historical.py inspect-web [days_ago]  # Inspect web results")
+        print("  python scrape_historical.py backfill [days]         # Run full backfill")

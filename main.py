@@ -1,237 +1,261 @@
-from config import config
 import asyncio
 import json
 import uvicorn
+from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse
-from contextlib import asynccontextmanager
-from pathlib import Path
-from datetime import datetime
-from database import init_db, SessionLocal, RaceResult
-from agents import state, start_all_agents
+from fastapi.responses import HTMLResponse
+import structlog
+from config import config
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_db()
-    asyncio.create_task(start_all_agents())
-    yield
+# Import our new modules
+from prediction_tracker import prediction_tracker, RacePrediction, HorsePrediction
+from racing_metrics import racing_tracker
+from betting_strategy import BettingStrategyEngine
 
-app = FastAPI(title="Horse Racing Overlay", lifespan=lifespan)
+app = FastAPI(title="Horse Racing Overlay API", version="2.0.0")
 
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-FRONTEND = Path(__file__).parent.parent / "frontend"
+# Initialize strategy engine
+strategy_engine = None
 
-@app.get("/", response_class=HTMLResponse)
+@app.on_event("startup")
+async def startup_event():
+    """Initialize components on startup."""
+    global strategy_engine
+    strategy_engine = BettingStrategyEngine(prediction_tracker)
+    structlog.configure(
+        processors=[structlog.processors.JSONRenderer()],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+    )
+
+# Basic endpoints
+@app.get("/")
 async def root():
-    return FileResponse(FRONTEND / "index.html")
-
-@app.get("/style.css")
-async def css():
-    return FileResponse(FRONTEND / "style.css", media_type="text/css")
-
-@app.get("/app.js")
-async def js():
-    return FileResponse(FRONTEND / "app.js", media_type="application/javascript")
-
-@app.get("/bulk", response_class=HTMLResponse)
-async def bulk_page():
-    return FileResponse(FRONTEND / "bulk.html")
-
-@app.get("/api/races")
-async def get_races():
-    return {"races": state["races"], "last_updated": state["last_updated"]}
-
-@app.get("/api/overlays")
-async def get_overlays():
     return {
-        "overlays": state["overlays"],
-        "last_updated": state["last_updated"],
-        "status": state["status"],
+        "message": "🏇 Horse Racing Overlay API v2.0", 
+        "status": "live",
+        "features": ["predictions", "strategies", "analytics"],
+        "docs": "/docs"
     }
 
-@app.get("/api/weather")
-async def get_weather():
-    return {"weather": state["weather"]}
-
-@app.get("/api/status")
-async def get_status():
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring."""
     return {
-        "status": state["status"],
-        "races_loaded": len(state["races"]),
-        "overlays_found": len(state["overlays"]),
-        "last_updated": state["last_updated"],
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": "2.0.0"
     }
 
-# ---------- Results endpoints ----------
-@app.post("/api/results")
-async def save_result(payload: dict):
+# Prediction endpoints
+@app.get("/predictions/accuracy")
+async def get_prediction_accuracy():
+    """Get overall prediction accuracy metrics."""
+    return prediction_tracker.get_overall_accuracy()
+
+@app.get("/predictions/analysis")
+async def get_prediction_analysis():
+    """Get detailed prediction analysis."""
+    return {
+        'overall': prediction_tracker.get_overall_accuracy(),
+        'by_conditions': prediction_tracker.get_accuracy_by_conditions(),
+        'confidence_analysis': prediction_tracker.get_confidence_analysis(),
+        'recent_trend': prediction_tracker.get_recent_performance_trend(days=14)
+    }
+
+@app.get("/predictions/performance/{days}")
+async def get_recent_performance(days: int):
+    """Get performance trend for specified number of days."""
+    return prediction_tracker.get_recent_performance_trend(days)
+
+@app.post("/predictions/record")
+async def record_prediction(race_data: dict):
+    """Record a new race prediction."""
     try:
-        db = SessionLocal()
-        track       = payload.get("track", "")
-        race_number = payload.get("race_number", 0)
-        winner      = payload.get("winner", "")
-        second      = payload.get("second", "")
-        third       = payload.get("third", "")
-        race_date   = datetime.now().strftime("%Y-%m-%d")
-        race_id     = f"{track}_{race_number}_{race_date}"
+        horses = [
+            HorsePrediction(**horse) for horse in race_data.get('horses', [])
+        ]
+        
+        race_pred = RacePrediction(
+            race_id=race_data['race_id'],
+            track=race_data['track'],
+            race_time=datetime.fromisoformat(race_data['race_time']),
+            race_type=race_data.get('race_type', 'unknown'),
+            distance=race_data.get('distance', 0),
+            surface=race_data.get('surface', 'unknown'),
+            weather=race_data.get('weather', 'unknown'),
+            field_size=race_data.get('field_size', len(horses)),
+            prediction_time=datetime.now(),
+            horses=horses,
+            predicted_winner=race_data['predicted_winner'],
+            predicted_quinella=race_data.get('predicted_quinella', []),
+            predicted_trifecta=race_data.get('predicted_trifecta', [])
+        )
+        
+        prediction_tracker.record_prediction(race_pred)
+        return {"success": True, "race_id": race_data['race_id']}
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
-        # Find model's top pick for this race from current state
-        model_top_pick = ""
-        model_top_pick_won = False
-        model_top_pick_placed = False
+@app.post("/predictions/result")
+async def record_race_result(result_data: dict):
+    """Record actual race results."""
+    try:
+        prediction_tracker.record_race_result(
+            race_id=result_data['race_id'],
+            results=result_data['results']
+        )
+        return {"success": True, "race_id": result_data['race_id']}
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
-        for o in state["overlays"]:
-            if o.get("track") == track and o.get("race_number") == race_number:
-                model_top_pick = o.get("horse_name", "")
-                break
+# Strategy endpoints
+@app.post("/strategy/analyze-race")
+async def analyze_race_strategy(race_data: dict):
+    """Get betting strategy for a specific race."""
+    try:
+        horses = [HorsePrediction(**horse) for horse in race_data.get('horses', [])]
+        race_pred = RacePrediction(
+            race_id=race_data['race_id'],
+            track=race_data['track'],
+            race_time=datetime.fromisoformat(race_data['race_time']),
+            race_type=race_data.get('race_type', 'unknown'),
+            distance=race_data.get('distance', 0),
+            surface=race_data.get('surface', 'unknown'),
+            weather=race_data.get('weather', 'unknown'),
+            field_size=race_data.get('field_size', len(horses)),
+            prediction_time=datetime.now(),
+            horses=horses,
+            predicted_winner=race_data['predicted_winner'],
+            predicted_quinella=race_data.get('predicted_quinella', []),
+            predicted_trifecta=race_data.get('predicted_trifecta', [])
+        )
+        
+        strategy = strategy_engine.analyze_race_strategy(race_pred)
+        
+        # Convert dataclass to dict for JSON response
+        from dataclasses import asdict
+        return asdict(strategy)
+        
+    except Exception as e:
+        return {"error": str(e)}
 
-        if model_top_pick and winner:
-            model_top_pick_won = model_top_pick.lower() == winner.lower()
-            model_top_pick_placed = model_top_pick.lower() in [
-                winner.lower(),
-                second.lower(),
-                third.lower()
-            ]
+@app.get("/strategy/bankroll-advice")
+async def get_bankroll_advice():
+    """Get bankroll management advice."""
+    return strategy_engine.get_bankroll_management_advice()
 
-        # Upsert — update if exists
-        existing = db.query(RaceResult).filter(RaceResult.race_id == race_id).first()
-        if existing:
-            existing.winner = winner
-            existing.second = second
-            existing.third = third
-            existing.model_top_pick = model_top_pick
-            existing.model_top_pick_won = model_top_pick_won
-            existing.model_top_pick_placed = model_top_pick_placed
-            existing.entered_at = datetime.utcnow()
+@app.post("/strategy/set-bankroll")
+async def set_bankroll(data: dict):
+    """Set current bankroll amount."""
+    try:
+        amount = data.get('amount')
+        if amount and amount > 0:
+            strategy_engine.set_bankroll(amount)
+            return {"success": True, "new_bankroll": amount}
         else:
-            db.add(RaceResult(
-                race_id=race_id,
-                track=track,
-                race_number=race_number,
-                race_date=race_date,
-                winner=winner,
-                second=second,
-                third=third,
-                model_top_pick=model_top_pick,
-                model_top_pick_won=model_top_pick_won,
-                model_top_pick_placed=model_top_pick_placed,
-            ))
+            return {"error": "Invalid bankroll amount"}
+    except Exception as e:
+        return {"error": str(e)}
 
-        db.commit()
-        db.close()
-        return {
-            "success": True,
-            "model_top_pick": model_top_pick,
-            "model_top_pick_won": model_top_pick_won,
-            "model_top_pick_placed": model_top_pick_placed,
+@app.get("/strategy/performance-summary")
+async def get_strategy_performance():
+    """Get performance summary for all strategies."""
+    overall = prediction_tracker.get_overall_accuracy()
+    conditions = prediction_tracker.get_accuracy_by_conditions()
+    
+    return {
+        "overall_performance": overall,
+        "performance_by_conditions": conditions,
+        "strategy_recommendations": {
+            "conservative_situations": "When track accuracy < 20%",
+            "aggressive_situations": "When track accuracy > 30% and ROI > 5%",
+            "value_hunting_situations": "When overlays > 30% regardless of accuracy"
         }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    }
 
-@app.get("/api/results")
-async def get_results():
-    try:
-        db = SessionLocal()
-        results = db.query(RaceResult).order_by(RaceResult.entered_at.desc()).all()
-        db.close()
-        return {
-            "results": [
-                {
-                    "race_id": r.race_id,
-                    "track": r.track,
-                    "race_number": r.race_number,
-                    "race_date": r.race_date,
-                    "winner": r.winner,
-                    "second": r.second,
-                    "third": r.third,
-                    "model_top_pick": r.model_top_pick,
-                    "model_top_pick_won": r.model_top_pick_won,
-                    "model_top_pick_placed": r.model_top_pick_placed,
-                    "entered_at": r.entered_at.isoformat() if r.entered_at else None,
-                }
-                for r in results
-            ]
+# Racing metrics endpoints
+@app.get("/metrics/racing")
+async def racing_metrics():
+    """Get racing-specific performance metrics."""
+    return racing_tracker.get_performance_summary()
+
+@app.get("/metrics/racing/sources")
+async def scraping_source_health():
+    """Get detailed scraping source health."""
+    sources = {}
+    for source, metrics in racing_tracker.scraping_metrics.items():
+        freshness = racing_tracker.get_data_freshness(source)
+        success_rate = racing_tracker.get_scraping_success_rate(source)
+        
+        status = "healthy"
+        if success_rate < 0.8:
+            status = "warning"
+        if success_rate < 0.5 or (freshness and freshness > 300):
+            status = "critical"
+        
+        sources[source] = {
+            'status': status,
+            'success_rate': success_rate,
+            'freshness_seconds': freshness,
+            'average_response_time': metrics.average_response_time,
+            'data_quality': metrics.data_quality_score
         }
-    except Exception as e:
-        return {"results": [], "error": str(e)}
+    
+    return sources
 
-@app.get("/api/accuracy")
-async def get_accuracy():
+# Dashboard endpoints
+@app.get("/dashboard/strategy", response_class=HTMLResponse)
+async def strategy_dashboard():
+    """Serve the strategy dashboard."""
     try:
-        db = SessionLocal()
-        results = db.query(RaceResult).all()
-        db.close()
-        total  = len(results)
-        wins   = sum(1 for r in results if r.model_top_pick_won)
-        places = sum(1 for r in results if r.model_top_pick_placed)
-        return {
-            "total_races": total,
-            "wins": wins,
-            "places": places,
-            "win_rate": round(wins / total * 100, 1) if total > 0 else 0,
-            "place_rate": round(places / total * 100, 1) if total > 0 else 0,
-        }
-    except Exception as e:
-        return {"total_races": 0, "wins": 0, "places": 0, "win_rate": 0, "place_rate": 0}
-# ---------- Historical backfill ----------
-@app.post("/api/backfill-history")
-async def backfill_history(days: int = 7):
+        with open('strategy_dashboard.html', 'r') as f:
+            html = f.read()
+            # Update API_BASE to point to current deployment
+            html = html.replace('https://punting-lab-backend.onrender.com', f'https://{config.HOST}')
+            return html
+    except:
+        return "<h1>Strategy Dashboard</h1><p>Dashboard file not found</p>"
+
+@app.get("/dashboard/predictions", response_class=HTMLResponse)
+async def prediction_dashboard():
+    """Serve the prediction dashboard."""
     try:
-        from scrape_historical import backfill_history as run_backfill
-        stats = await run_backfill(days)
-        return {"success": True, "stats": stats}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-# ---------- WebSocket ----------
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections = []
+        with open('prediction_dashboard.html', 'r') as f:
+            html = f.read()
+            html = html.replace('https://punting-lab-backend.onrender.com', f'https://{config.HOST}')
+            return html
+    except:
+        return "<h1>Prediction Dashboard</h1><p>Dashboard file not found</p>"
 
-    async def connect(self, websocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-
-    async def broadcast(self, data):
-        for connection in self.active_connections:
-            try:
-                await connection.send_text(json.dumps(data))
-            except Exception:
-                pass
-
-manager = ConnectionManager()
+# WebSocket for real-time updates
+active_connections = []
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+    await websocket.accept()
+    active_connections.append(websocket)
+    racing_tracker.track_websocket_connection(True)
+    
     try:
-        await websocket.send_text(json.dumps({
-            "type": "init",
-            "overlays": state["overlays"],
-            "weather": state["weather"],
-            "status": state["status"],
-        }))
         while True:
-            await asyncio.sleep(30)
-            await websocket.send_text(json.dumps({
-                "type": "update",
-                "overlays": state["overlays"],
-                "weather": state["weather"],
-                "status": state["status"],
-                "last_updated": state["last_updated"],
-            }))
-    except (WebSocketDisconnect, Exception):
-        manager.disconnect(websocket)
+            data = await websocket.receive_text()
+            # Echo back for now - you can add real functionality here
+            await websocket.send_text(f"Echo: {data}")
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)
+        racing_tracker.track_websocket_connection(False)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host=config.HOST, port=config.PORT, reload=config.RELOAD)
