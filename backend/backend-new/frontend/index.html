@@ -1,97 +1,1823 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Horse Racing Overlay</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>The Punting Lab — Australian Racing Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #080c10;
+  --surface:   #0d1219;
+  --card:      #111820;
+  --border:    #1e2a38;
+  --border2:   #243040;
+  --gold:      #c9a84c;
+  --gold2:     #e8c96a;
+  --teal:      #2dd4bf;
+  --red:       #ef4444;
+  --green:     #22c55e;
+  --orange:    #f97316;
+  --muted:     #4a6080;
+  --text:      #e2eaf4;
+  --text2:     #8aa0bc;
+  --text3:     #4a6080;
+  --strong:    #ffd700;
+  --good:      #2dd4bf;
+  --marginal:  #f97316;
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-mono:    'DM Mono', monospace;
+  --font-body:    'DM Sans', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── NOISE TEXTURE ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.4;
+}
+
+/* ── HEADER ── */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(8,12,16,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-mark {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, var(--gold), var(--gold2));
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.logo-text {
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: var(--text);
+}
+
+.logo-text span { color: var(--gold); }
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.status-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+.status-dot.red   { background: var(--red); }
+.status-dot.grey  { background: var(--muted); }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+}
+
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold), var(--gold2));
+  color: #000;
+}
+.btn-gold:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+}
+.btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+
+/* ── NAV TABS ── */
+.nav-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.nav-tab {
+  padding: 12px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text3);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.nav-tab:hover { color: var(--text2); }
+.nav-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+/* ── LAYOUT ── */
+.page { display: none; padding: 24px; max-width: 1600px; margin: 0 auto; }
+.page.active { display: block; }
+
+/* ── NEXT RACE BANNER ── */
+.next-race-bar {
+  background: linear-gradient(90deg, rgba(201,168,76,0.12), rgba(201,168,76,0.04));
+  border: 1px solid rgba(201,168,76,0.25);
+  border-radius: 8px;
+  padding: 10px 16px;
+  display: none;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.next-race-bar.visible { display: flex; }
+.next-race-label { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--gold); }
+.next-race-name { font-weight: 600; font-size: 14px; }
+.next-race-countdown { font-family: var(--font-display); font-size: 28px; letter-spacing: 2px; color: var(--gold2); margin-left: auto; }
+.next-race-countdown.urgent { color: var(--red); animation: pulse 1s infinite; }
+.next-race-countdown.live { color: var(--green); }
+
+/* ── STAT CARDS ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.stat-card:hover { border-color: var(--border2); }
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  opacity: 0.5;
+}
+
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 36px;
+  letter-spacing: 1px;
+  line-height: 1;
+  color: var(--text);
+}
+
+.stat-value.gold  { color: var(--gold2); }
+.stat-value.green { color: var(--green); }
+.stat-value.red   { color: var(--red); }
+.stat-value.teal  { color: var(--teal); }
+
+.stat-sub {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 4px;
+}
+
+/* ── FILTER BAR ── */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.filter-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+select, input[type="text"] {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+select:hover, input[type="text"]:hover { border-color: var(--border2); }
+select:focus, input[type="text"]:focus { border-color: var(--gold); }
+
+/* ── RACE BLOCK ── */
+.race-block {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.race-block:hover { border-color: var(--border2); }
+.race-block.resulted-race { opacity: 0.65; }
+
+.race-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  cursor: pointer;
+}
+
+.race-track {
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 1px;
+  color: var(--gold2);
+}
+
+.race-meta {
+  font-size: 12px;
+  color: var(--text3);
+  flex: 1;
+}
+
+.race-distance-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: rgba(45,212,191,0.1);
+  color: var(--teal);
+  border: 1px solid rgba(45,212,191,0.2);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.race-timer {
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: var(--text2);
+  margin-left: auto;
+}
+
+.race-timer.urgent { color: var(--red); animation: pulse 1s infinite; }
+.race-timer.soon   { color: var(--orange); }
+.race-timer.live   { color: var(--green); }
+.race-timer.resulted { color: var(--muted); font-size: 13px; font-family: var(--font-mono); letter-spacing: 1px; }
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+thead th {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text3);
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+tbody tr {
+  border-bottom: 1px solid rgba(30,42,56,0.5);
+  transition: background 0.1s;
+}
+
+tbody tr:hover { background: rgba(255,255,255,0.02); }
+tbody tr:last-child { border-bottom: none; }
+
+tbody td {
+  padding: 9px 10px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.rank-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.r1 { background: linear-gradient(135deg,#c9a84c,#e8c96a); color:#000; }
+.r2 { background: rgba(192,192,192,0.2); color:#c0c0c0; border:1px solid #c0c0c0; }
+.r3 { background: rgba(205,127,50,0.2);  color:#cd7f32; border:1px solid #cd7f32; }
+.rn { background: rgba(255,255,255,0.05); color:var(--text3); }
+
+.horse-name { font-weight: 600; color: var(--text); }
+.winner-mark { color: var(--green); margin-left: 4px; }
+
+.form-char { font-family: var(--font-mono); }
+.form-win   { color: var(--green); font-weight: 700; }
+.form-place { color: var(--teal); }
+.form-miss  { color: var(--text3); }
+
+.stat-hi  { color: var(--green); font-weight: 600; }
+.stat-mid { color: var(--gold); }
+.stat-lo  { color: var(--text3); }
+
+.fair-val { font-weight: 700; color: var(--text); }
+.fair-odds { color: var(--teal); font-family: var(--font-mono); }
+.tote-odds { color: var(--text2); font-family: var(--font-mono); }
+
+.overlay-pos { color: var(--green); font-weight: 700; font-family: var(--font-mono); }
+.overlay-neg { color: var(--text3); font-family: var(--font-mono); }
+
+.badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge.STRONG   { background: rgba(255,215,0,0.15);   color: var(--strong);   border:1px solid rgba(255,215,0,0.3); }
+.badge.GOOD     { background: rgba(45,212,191,0.12);  color: var(--teal);    border:1px solid rgba(45,212,191,0.3); }
+.badge.MARGINAL { background: rgba(249,115,22,0.12);  color: var(--orange);  border:1px solid rgba(249,115,22,0.3); }
+.badge.NONE,
+.badge.NA       { background: rgba(255,255,255,0.04); color: var(--text3);   border:1px solid var(--border); }
+
+/* ── RESULT FOOTER ── */
+.result-footer {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.result-label { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); }
+.result-winner { color: var(--gold2); font-weight: 600; }
+.result-enter-btn {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  transition: all 0.15s;
+}
+.result-enter-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+.result-input-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: 100%; }
+.result-input {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  flex: 1;
+  min-width: 120px;
+  max-width: 200px;
+  outline: none;
+}
+.result-input:focus { border-color: var(--gold); }
+.result-save-btn {
+  background: linear-gradient(135deg, var(--gold), var(--gold2));
+  color: #000;
+  border: none;
+  padding: 5px 14px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+}
+.result-cancel-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* ── BEST BETS ── */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 2px;
+  color: var(--text);
+}
+
+.section-title span { color: var(--gold); }
+
+.section-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--border2), transparent);
+}
+
+.bet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.bet-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.bet-card:hover { transform: translateY(-2px); border-color: var(--border2); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+
+.bet-card.rank-1 { border-color: rgba(201,168,76,0.4); }
+.bet-card.rank-1::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(201,168,76,0.06),transparent); pointer-events:none; }
+
+.bet-card.rank-2::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(192,192,192,0.04),transparent); pointer-events:none; }
+.bet-card.rank-3::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(205,127,50,0.04),transparent); pointer-events:none; }
+
+.bet-rank { font-family: var(--font-mono); font-size: 10px; color: var(--text3); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
+.bet-rank.r1 { color: var(--gold); }
+.bet-horse { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+.bet-race  { font-size: 11px; color: var(--text3); margin-bottom: 10px; font-family: var(--font-mono); }
+
+.bet-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.bet-stat-label { font-size: 10px; color: var(--text3); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.5px; }
+.bet-stat-val   { font-size: 14px; font-weight: 600; color: var(--text); }
+.bet-stat-val.good { color: var(--green); }
+.bet-stat-val.warn { color: var(--gold); }
+
+.bet-footer { display: flex; justify-content: space-between; align-items: center; }
+.bet-timer  { font-family: var(--font-display); font-size: 18px; letter-spacing: 1px; color: var(--text2); }
+.bet-timer.urgent { color: var(--red); }
+.bet-timer.live   { color: var(--green); }
+
+/* ── ACCURACY TABLE ── */
+.accuracy-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
+.acc-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; text-align:center; }
+.acc-val  { font-family:var(--font-display); font-size:32px; color:var(--gold2); }
+.acc-lbl  { font-family:var(--font-mono); font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+
+.results-table-wrap { overflow-x:auto; }
+.results-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+.results-table th { font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text3); padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); }
+.results-table td { padding:9px 12px; border-bottom:1px solid rgba(30,42,56,0.5); }
+.results-table tr:last-child td { border-bottom:none; }
+.result-win  { color:var(--green); font-weight:700; }
+.result-place{ color:var(--gold); font-weight:700; }
+.result-loss { color:var(--red); }
+
+/* ── BANKROLL PAGE ── */
+.bankroll-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+@media(max-width:768px){ .bankroll-grid{grid-template-columns:1fr;} }
+
+.panel {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:20px;
+}
+
+.panel-title {
+  font-family:var(--font-display);
+  font-size:18px;
+  letter-spacing:2px;
+  color:var(--gold2);
+  margin-bottom:16px;
+  padding-bottom:10px;
+  border-bottom:1px solid var(--border);
+}
+
+.form-row { display:flex; flex-direction:column; gap:5px; margin-bottom:14px; }
+.form-row label { font-family:var(--font-mono); font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; }
+.form-row input, .form-row select { width:100%; }
+
+.staking-plan {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:14px;
+  margin-bottom:10px;
+  cursor:pointer;
+  transition:all 0.15s;
+}
+
+.staking-plan:hover { border-color:var(--gold); }
+.staking-plan.active { border-color:var(--gold); background:rgba(201,168,76,0.06); }
+.staking-plan-name  { font-weight:600; font-size:13px; margin-bottom:3px; }
+.staking-plan-desc  { font-size:12px; color:var(--text3); }
+
+.bet-log { max-height:320px; overflow-y:auto; }
+.bet-log-item {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:8px 0;
+  border-bottom:1px solid var(--border);
+  font-size:12px;
+}
+.bet-log-item:last-child { border-bottom:none; }
+.bet-log-win  { color:var(--green); }
+.bet-log-loss { color:var(--red); }
+
+.progress-bar-wrap { background:var(--surface); border-radius:4px; height:8px; overflow:hidden; margin-top:8px; }
+.progress-bar { height:100%; border-radius:4px; background:linear-gradient(90deg,var(--green),var(--teal)); transition:width 0.5s; }
+.progress-bar.warn { background:linear-gradient(90deg,var(--orange),var(--red)); }
+
+/* ── STRATEGY PAGE ── */
+.strategy-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
+
+.strategy-card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:20px;
+  transition:border-color 0.2s;
+}
+
+.strategy-card:hover { border-color:var(--border2); }
+
+.strategy-icon { font-size:28px; margin-bottom:10px; }
+.strategy-title { font-family:var(--font-display); font-size:17px; letter-spacing:1px; color:var(--gold2); margin-bottom:8px; }
+.strategy-text  { font-size:13px; color:var(--text2); line-height:1.7; }
+.strategy-tip   { background:rgba(201,168,76,0.08); border-left:3px solid var(--gold); padding:10px 12px; border-radius:0 6px 6px 0; margin-top:12px; font-size:12px; color:var(--text2); }
+
+.discipline-alert {
+  background:rgba(239,68,68,0.08);
+  border:1px solid rgba(239,68,68,0.25);
+  border-radius:8px;
+  padding:14px 16px;
+  margin-bottom:16px;
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+}
+.discipline-alert-icon { font-size:18px; flex-shrink:0; }
+.discipline-alert-text { font-size:13px; color:var(--text2); line-height:1.6; }
+
+/* ── VALUE FINDER ── */
+.value-finder-grid { display:grid; grid-template-columns:320px 1fr; gap:20px; }
+@media(max-width:900px){ .value-finder-grid{grid-template-columns:1fr;} }
+
+.value-result-card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:16px;
+  margin-bottom:10px;
+  transition:all 0.2s;
+}
+.value-result-card:hover { border-color:var(--gold); }
+.value-result-card.high-value { border-color:rgba(34,197,94,0.4); background:rgba(34,197,94,0.04); }
+.value-score { font-family:var(--font-display); font-size:28px; }
+.value-score.pos { color:var(--green); }
+.value-score.neg { color:var(--red); }
+
+/* ── WEATHER CARDS ── */
+.weather-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; margin-bottom:20px; }
+
+.weather-card {
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:16px;
+}
+
+.weather-track { font-family:var(--font-display); font-size:16px; letter-spacing:1px; color:var(--gold2); margin-bottom:10px; }
+.weather-stat  { display:flex; justify-content:space-between; padding:4px 0; font-size:12px; border-bottom:1px solid var(--border); }
+.weather-stat:last-child { border-bottom:none; }
+.weather-stat-label { color:var(--text3); }
+.weather-stat-val   { color:var(--text); font-family:var(--font-mono); }
+
+/* ── EXOTIC BETS ── */
+.exotic-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; }
+.exotic-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px; }
+.exotic-title { font-family:var(--font-display); font-size:18px; letter-spacing:1px; color:var(--teal); margin-bottom:8px; }
+.exotic-text  { font-size:13px; color:var(--text2); line-height:1.7; margin-bottom:10px; }
+.exotic-example { background:var(--surface); border-radius:6px; padding:10px 12px; font-family:var(--font-mono); font-size:12px; color:var(--gold); }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:var(--muted); }
+
+/* ── EMPTY STATE ── */
+.empty { text-align:center; padding:40px; color:var(--text3); font-family:var(--font-mono); font-size:12px; }
+.empty-icon { font-size:32px; margin-bottom:8px; }
+
+/* ── LOADING ── */
+.loading-shimmer {
+  background: linear-gradient(90deg, var(--card) 25%, var(--surface) 50%, var(--card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius:4px;
+  height:16px;
+  margin:4px 0;
+}
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* ── TOAST ── */
+.toast {
+  position:fixed;
+  bottom:24px;
+  right:24px;
+  background:var(--card);
+  border:1px solid var(--border2);
+  border-radius:8px;
+  padding:12px 16px;
+  font-size:13px;
+  z-index:999;
+  transform:translateY(80px);
+  opacity:0;
+  transition:all 0.3s;
+  max-width:300px;
+}
+.toast.show { transform:translateY(0); opacity:1; }
+.toast.success { border-color:var(--green); }
+.toast.error   { border-color:var(--red); }
+
+</style>
 </head>
 <body>
-    <header>
-        <div class="header-inner">
-            <h1>🏇 Horse Racing Overlay</h1>
-            <div class="status-bar">
-                <span id="status-dot" class="dot grey"></span>
-                <span id="status-text">Connecting...</span>
-                <span id="last-updated"></span>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">🏇</div>
+    <div class="logo-text">THE <span>PUNTING</span> LAB</div>
+  </div>
+  <div class="header-right">
+    <div class="status-pill">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Connecting...</span>
+    </div>
+    <div class="status-pill" id="last-updated-pill" style="display:none">
+      <span id="last-updated"></span>
+    </div>
+    <button class="btn btn-gold" onclick="manualRefresh()">⟳ Refresh</button>
+  </div>
+</header>
+
+<!-- NAV -->
+<nav class="nav-tabs">
+  <div class="nav-tab active" onclick="showPage('dashboard', this)">Dashboard</div>
+  <div class="nav-tab" onclick="showPage('races', this)">Race Analysis</div>
+  <div class="nav-tab" onclick="showPage('value', this)">Value Finder</div>
+  <div class="nav-tab" onclick="showPage('bankroll', this)">Bankroll</div>
+  <div class="nav-tab" onclick="showPage('accuracy', this)">Accuracy</div>
+  <div class="nav-tab" onclick="showPage('strategy', this)">Strategy</div>
+  <div class="nav-tab" onclick="showPage('exotic', this)">Exotic Bets</div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════ DASHBOARD PAGE -->
+<div class="page active" id="page-dashboard">
+
+  <div class="next-race-bar" id="next-race-bar">
+    <div>
+      <div class="next-race-label">Next Race</div>
+      <div class="next-race-name" id="next-race-name">—</div>
+    </div>
+    <div class="next-race-countdown" id="next-race-countdown">--:--</div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-label">Races Loaded</div>
+      <div class="stat-value gold" id="races-count">0</div>
+      <div class="stat-sub">Today's meetings</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Runners</div>
+      <div class="stat-value" id="runners-count">0</div>
+      <div class="stat-sub">Active starters</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Strong Value</div>
+      <div class="stat-value green" id="strong-count">0</div>
+      <div class="stat-sub">Overlay ≥ 10</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Good Value</div>
+      <div class="stat-value teal" id="good-count">0</div>
+      <div class="stat-sub">Overlay ≥ 6</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Win Rate</div>
+      <div class="stat-value gold" id="dash-winrate">—</div>
+      <div class="stat-sub">Model accuracy</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Bankroll</div>
+      <div class="stat-value" id="dash-bankroll">—</div>
+      <div class="stat-sub">Current balance</div>
+    </div>
+  </div>
+
+  <!-- BEST BETS -->
+  <div id="best-bets-section" style="display:none">
+    <div class="section-header">
+      <div class="section-title">TOP <span>PICKS</span></div>
+      <div class="section-line"></div>
+    </div>
+    <div class="bet-grid" id="best-bets-grid"></div>
+  </div>
+
+  <!-- WEATHER -->
+  <div id="weather-section" style="display:none; margin-bottom:20px;">
+    <div class="section-header">
+      <div class="section-title">TRACK <span>CONDITIONS</span></div>
+      <div class="section-line"></div>
+    </div>
+    <div class="weather-grid" id="weather-grid"></div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════ RACES PAGE -->
+<div class="page" id="page-races">
+
+  <div class="next-race-bar" id="next-race-bar2">
+    <div>
+      <div class="next-race-label">Next Race</div>
+      <div class="next-race-name" id="next-race-name2">—</div>
+    </div>
+    <div class="next-race-countdown" id="next-race-countdown2">--:--</div>
+  </div>
+
+  <div class="filter-bar">
+    <span class="filter-label">Rating</span>
+    <select id="filter-rating">
+      <option value="ALL">All</option>
+      <option value="STRONG">Strong</option>
+      <option value="GOOD">Good</option>
+      <option value="MARGINAL">Marginal</option>
+    </select>
+    <span class="filter-label">Track</span>
+    <select id="filter-track"><option value="ALL">All Tracks</option></select>
+    <span class="filter-label">Sort</span>
+    <select id="filter-sort">
+      <option value="fair_value">Fair Value %</option>
+      <option value="overlay_score">Overlay Score</option>
+      <option value="track_wins">Track Win %</option>
+    </select>
+  </div>
+
+  <div id="race-cards-container">
+    <div class="empty"><div class="empty-icon">🏇</div>Loading race data...</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ VALUE FINDER PAGE -->
+<div class="page" id="page-value">
+  <div class="value-finder-grid">
+
+    <div class="panel">
+      <div class="panel-title">VALUE CALCULATOR</div>
+      <div class="form-row">
+        <label>Horse Name</label>
+        <input type="text" id="vf-horse" placeholder="Enter horse name..."/>
+      </div>
+      <div class="form-row">
+        <label>Tote / Market Odds ($)</label>
+        <input type="text" id="vf-odds" placeholder="e.g. 4.50"/>
+      </div>
+      <div class="form-row">
+        <label>Your Estimated Win %</label>
+        <input type="text" id="vf-prob" placeholder="e.g. 28"/>
+      </div>
+      <div class="form-row">
+        <label>Career Win %</label>
+        <input type="text" id="vf-career" placeholder="e.g. 35"/>
+      </div>
+      <div class="form-row">
+        <label>Track Win %</label>
+        <input type="text" id="vf-track" placeholder="e.g. 40"/>
+      </div>
+      <div class="form-row">
+        <label>Distance Win %</label>
+        <input type="text" id="vf-dist" placeholder="e.g. 30"/>
+      </div>
+      <button class="btn btn-gold" style="width:100%;justify-content:center;margin-top:6px" onclick="calcValue()">Calculate Value</button>
+
+      <div id="vf-result" style="margin-top:16px;display:none">
+        <div class="value-result-card" id="vf-result-card">
+          <div class="stat-label">Horse</div>
+          <div id="vf-res-horse" style="font-size:16px;font-weight:700;margin-bottom:10px"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <div class="stat-label">Fair Value</div>
+              <div id="vf-res-fv" style="font-size:22px;font-weight:700;font-family:var(--font-mono)"></div>
             </div>
+            <div>
+              <div class="stat-label">Overlay Score</div>
+              <div id="vf-res-overlay" class="value-score"></div>
+            </div>
+            <div>
+              <div class="stat-label">Fair Odds</div>
+              <div id="vf-res-fairodds" style="font-family:var(--font-mono);color:var(--teal)"></div>
+            </div>
+            <div>
+              <div class="stat-label">Rating</div>
+              <div id="vf-res-rating"></div>
+            </div>
+          </div>
+          <div id="vf-res-advice" class="strategy-tip" style="margin-top:12px"></div>
         </div>
-    </header>
+      </div>
+    </div>
 
-    <main>
-        <!-- Summary Cards -->
-        <section class="summary-cards">
-            <div class="card">
-                <div class="card-label">Races Loaded</div>
-                <div class="card-value" id="races-count">--</div>
-            </div>
-            <div class="card">
-                <div class="card-label">Runners</div>
-                <div class="card-value" id="runners-count">--</div>
-            </div>
-            <div class="card">
-                <div class="card-label">Strong Value</div>
-                <div class="card-value highlight" id="strong-count">--</div>
-            </div>
-            <div class="card">
-                <div class="card-label">Good Value</div>
-                <div class="card-value highlight-good" id="good-count">--</div>
-            </div>
-        </section>
+    <div>
+      <div class="section-header">
+        <div class="section-title">LIVE <span>VALUE</span> OVERLAYS</div>
+        <div class="section-line"></div>
+      </div>
+      <div id="value-overlays-list">
+        <div class="empty"><div class="empty-icon">📊</div>No overlays loaded</div>
+      </div>
+    </div>
+  </div>
+</div>
 
-        <!-- Next Race Countdown -->
-        <section class="next-race-banner" id="next-race-banner" style="display:none">
-            <div class="next-race-inner">
-                <span class="next-race-label">NEXT RACE</span>
-                <span class="next-race-name" id="next-race-name">--</span>
-                <span class="next-race-countdown" id="next-race-countdown">--:--</span>
-            </div>
-        </section>
+<!-- ═══════════════════════════════════════════════ BANKROLL PAGE -->
+<div class="page" id="page-bankroll">
+  <div class="bankroll-grid">
 
-        <!-- Filters -->
-        <section class="filters">
-            <label>Rating:
-                <select id="filter-rating">
-                    <option value="ALL">All</option>
-                    <option value="STRONG">Strong</option>
-                    <option value="GOOD">Good</option>
-                    <option value="MARGINAL">Marginal</option>
-                    <option value="N/A">No Odds</option>
-                </select>
-            </label>
-            <label>Track:
-                <select id="filter-track">
-                    <option value="ALL">All Tracks</option>
-                </select>
-            </label>
-            <label>Sort by:
-                <select id="filter-sort">
-                    <option value="fair_value">Fair Value %</option>
-                    <option value="overlay_score">Overlay Score</option>
-                    <option value="track_wins">Track Win %</option>
-                </select>
-            </label>
-            <button id="refresh-btn" onclick="fetchData()">🔄 Refresh</button>
-        </section>
-        <!-- Best Bets -->
-        <section class="best-bets-section" id="best-bets-section" style="display:none">
-            <h2>⭐ Today's Best Bets</h2>
-            <div id="best-bets-grid" class="best-bets-grid"></div>
-        </section>
-        <!-- Race Cards View -->
-        <section class="table-section">
-            <h2>Runner Rankings</h2>
-            <div id="race-cards-container"></div>
-        </section>
+    <div>
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-title">BANKROLL SETUP</div>
+        <div class="form-row">
+          <label>Starting Bankroll ($)</label>
+          <input type="text" id="br-starting" placeholder="e.g. 1000"/>
+        </div>
+        <div class="form-row">
+          <label>Current Balance ($)</label>
+          <input type="text" id="br-current" placeholder="e.g. 1150"/>
+        </div>
+        <div class="form-row">
+          <label>Daily Loss Limit ($)</label>
+          <input type="text" id="br-limit" placeholder="e.g. 100"/>
+        </div>
+        <button class="btn btn-gold" style="width:100%;justify-content:center" onclick="saveBankroll()">Save Bankroll</button>
 
-        <!-- Weather Section -->
-        <section class="weather-section">
-            <h2>Track Weather</h2>
-            <div id="weather-grid" class="weather-grid">
-                <p class="loading">Loading weather...</p>
-            </div>
-        </section>
-    </main>
+        <div id="br-display" style="margin-top:16px;display:none">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span class="stat-label">Progress</span>
+            <span id="br-pct" style="font-family:var(--font-mono);font-size:12px;color:var(--gold)"></span>
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar" id="br-bar" style="width:0%"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+            <div><div class="stat-label">P&L</div><div id="br-pnl" style="font-size:18px;font-weight:700;font-family:var(--font-mono)"></div></div>
+            <div><div class="stat-label">ROI</div><div id="br-roi" style="font-size:18px;font-weight:700;font-family:var(--font-mono)"></div></div>
+          </div>
+        </div>
+      </div>
 
-    <script src="app.js?v=5"></script>
+      <div class="panel">
+        <div class="panel-title">LOG A BET</div>
+        <div class="form-row">
+          <label>Horse / Race</label>
+          <input type="text" id="bet-horse" placeholder="Horse name & race..."/>
+        </div>
+        <div class="form-row">
+          <label>Stake ($)</label>
+          <input type="text" id="bet-stake" placeholder="e.g. 20"/>
+        </div>
+        <div class="form-row">
+          <label>Odds</label>
+          <input type="text" id="bet-odds" placeholder="e.g. 4.50"/>
+        </div>
+        <div class="form-row">
+          <label>Outcome</label>
+          <select id="bet-outcome">
+            <option value="pending">Pending</option>
+            <option value="win">Win</option>
+            <option value="loss">Loss</option>
+          </select>
+        </div>
+        <button class="btn btn-gold" style="width:100%;justify-content:center" onclick="logBet()">Log Bet</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-title">STAKING PLANS</div>
+        <div class="staking-plan active" id="plan-flat" onclick="selectPlan('flat')">
+          <div class="staking-plan-name">Flat Staking</div>
+          <div class="staking-plan-desc">Bet the same fixed amount every race. Simple, disciplined, easy to track.</div>
+        </div>
+        <div class="staking-plan" id="plan-pct" onclick="selectPlan('pct')">
+          <div class="staking-plan-name">% of Bankroll (Kelly-lite)</div>
+          <div class="staking-plan-desc">Stake 2–5% of current bankroll per bet. Grows with wins, shrinks with losses.</div>
+        </div>
+        <div class="staking-plan" id="plan-level" onclick="selectPlan('level')">
+          <div class="staking-plan-name">Level Stakes by Rating</div>
+          <div class="staking-plan-desc">STRONG = 3 units, GOOD = 2 units, MARGINAL = 1 unit. Reward confidence.</div>
+        </div>
+
+        <div id="plan-advice" style="margin-top:14px" class="strategy-tip">
+          Flat staking is recommended for beginners. Keep stakes consistent until you have 50+ bets of data to evaluate your edge.
+        </div>
+
+        <div id="suggested-stake" style="margin-top:14px;display:none">
+          <div class="stat-label">Suggested Stake</div>
+          <div id="suggested-stake-val" style="font-family:var(--font-display);font-size:32px;color:var(--gold2)"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">BET HISTORY</div>
+        <div class="bet-log" id="bet-log">
+          <div class="empty" style="padding:20px"><div class="empty-icon">📋</div>No bets logged yet</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ ACCURACY PAGE -->
+<div class="page" id="page-accuracy">
+  <div class="accuracy-grid" id="accuracy-stats" style="display:none">
+    <div class="acc-card"><div class="acc-val" id="acc-total">0</div><div class="acc-lbl">Races Tracked</div></div>
+    <div class="acc-card"><div class="acc-val" id="acc-wins">0</div><div class="acc-lbl">Wins</div></div>
+    <div class="acc-card"><div class="acc-val" id="acc-winrate">0%</div><div class="acc-lbl">Win Rate</div></div>
+    <div class="acc-card"><div class="acc-val" id="acc-placerate">0%</div><div class="acc-lbl">Place Rate</div></div>
+  </div>
+
+  <div class="section-header">
+    <div class="section-title">RESULTS <span>LOG</span></div>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="results-table-wrap">
+    <table class="results-table">
+      <thead>
+        <tr>
+          <th>Date</th><th>Track</th><th>Race</th><th>Top Pick</th>
+          <th>Winner</th><th>2nd</th><th>3rd</th><th>Result</th>
+        </tr>
+      </thead>
+      <tbody id="accuracy-tbody">
+        <tr><td colspan="8" class="empty">No results recorded yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ STRATEGY PAGE -->
+<div class="page" id="page-strategy">
+
+  <div class="discipline-alert">
+    <div class="discipline-alert-icon">⚠️</div>
+    <div class="discipline-alert-text">
+      <strong>Golden Rule:</strong> If the analysis isn't clear, don't bet. Every bet should have a documented reason based on data — never gut feel, never chasing losses.
+    </div>
+  </div>
+
+  <div class="strategy-grid">
+    <div class="strategy-card">
+      <div class="strategy-icon">📊</div>
+      <div class="strategy-title">VALUE BETTING</div>
+      <div class="strategy-text">Value exists when the true probability of a horse winning is higher than what the market implies. If a horse has a 30% chance of winning, fair odds are $3.33. If you can get $4.50, that's a 35% edge per bet.</div>
+      <div class="strategy-tip">Focus on Overlay Score. Target STRONG (≥10) and GOOD (≥6) rated horses only. Skip races with no clear value.</div>
+    </div>
+
+    <div class="strategy-card">
+      <div class="strategy-icon">🎯</div>
+      <div class="strategy-title">FIXED VS PARIMUTUEL</div>
+      <div class="strategy-text"><strong style="color:var(--gold)">Fixed Odds</strong> — You lock in a price before the race. Better for value hunting as the price is guaranteed regardless of late money. Use when you've identified an overlay.<br><br><strong style="color:var(--teal)">Parimutuel (Tote)</strong> — Pool betting where final odds depend on all bets placed. Can offer better returns on outsiders but harder to predict exact payout.</div>
+      <div class="strategy-tip">For value betting, fixed odds are preferred. You know your edge before placing the bet.</div>
+    </div>
+
+    <div class="strategy-card">
+      <div class="strategy-icon">🏇</div>
+      <div class="strategy-title">FORM ANALYSIS</div>
+      <div class="strategy-text">Recent form is the strongest predictor. A horse that has finished 1st or 2nd in its last two starts on similar distance and track conditions is your starting point — not the endpoint.</div>
+      <div class="strategy-tip">Check: barrier draw, jockey form at this track, days since last run (14–28 days is ideal), and track condition history.</div>
+    </div>
+
+    <div class="strategy-card">
+      <div class="strategy-icon">🌦️</div>
+      <div class="strategy-title">TRACK CONDITIONS</div>
+      <div class="strategy-text">Track condition is massively underweighted by casual bettors. Heavy tracks produce enormous upsets. Some horses are specialist wet trackers — their price often doesn't reflect this in the morning market.</div>
+      <div class="strategy-tip">Always check condition win % before any bet. A 40%+ condition win rate on a Heavy 8 track is a significant edge.</div>
+    </div>
+
+    <div class="strategy-card">
+      <div class="strategy-icon">🧠</div>
+      <div class="strategy-title">DISCIPLINE RULES</div>
+      <div class="strategy-text">1. Never bet more than your daily loss limit<br>2. Never increase stake to chase losses<br>3. Never bet on races with no GOOD+ overlay<br>4. Keep records — every bet, every result<br>5. Review monthly, not race by race</div>
+      <div class="strategy-tip">Emotion is your biggest opponent. The bookmaker is patient. Be more patient.</div>
+    </div>
+
+    <div class="strategy-card">
+      <div class="strategy-icon">🗓️</div>
+      <div class="strategy-title">SPECIALIST RACES</div>
+      <div class="strategy-text"><strong style="color:var(--gold)">Fillies & Mares</strong> — Form can be inconsistent, but class dropbacks are very valuable.<br><br><strong style="color:var(--teal)">Maiden Races</strong> — Most reliable form is recent trial/jumpout data. Lean toward small fields.<br><br><strong style="color:var(--orange)">Group Races</strong> — Public overbet favourites. Look for forgotten horses with class.</div>
+    </div>
+
+    <div class="strategy-card">
+      <div class="strategy-icon">📍</div>
+      <div class="strategy-title">TRACK BIASES</div>
+      <div class="strategy-text"><strong style="color:var(--gold)">Flemington</strong> — Wide, flat. Speed from barriers 1–4 dominant in sprints.<br><br><strong style="color:var(--teal)">Caulfield</strong> — Tight turns favour handy horses. Inside barriers critical.<br><br><strong style="color:var(--orange)">Randwick</strong> — Long straight rewards staying power. Barrier less important in middle distances.<br><br><strong style="color:var(--green)">Eagle Farm</strong> — Heavy bias to on-pace runners.</div>
+    </div>
+
+    <div class="strategy-card">
+      <div class="strategy-icon">📈</div>
+      <div class="strategy-title">CONTINUOUS IMPROVEMENT</div>
+      <div class="strategy-text">Review your results every 50 bets minimum. Look for: which track types returned positive ROI, which rating tiers performed best, which race types you over- or under-performed in.</div>
+      <div class="strategy-tip">Strategy evolves with data. Your edge today may not be your edge in 6 months. Adapt or lose it.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ EXOTIC BETS PAGE -->
+<div class="page" id="page-exotic">
+  <div class="discipline-alert" style="border-color:rgba(201,168,76,0.3);background:rgba(201,168,76,0.06)">
+    <div class="discipline-alert-icon">💡</div>
+    <div class="discipline-alert-text">Exotic bets offer larger returns but require more precision. Allocate no more than 20% of your daily budget to exotics. They are high-variance by nature.</div>
+  </div>
+
+  <div class="exotic-grid">
+    <div class="exotic-card">
+      <div class="exotic-title">QUINELLA</div>
+      <div class="exotic-text">Pick two horses to finish 1st and 2nd in either order. Lower payout than exacta but much easier to win.</div>
+      <div class="strategy-tip" style="margin-bottom:10px">Best used when two horses are clearly superior to the field. Use the top 2 Fair Value runners from this tool.</div>
+      <div class="exotic-example">Example: Horses A & B quinella<br>A wins, B 2nd ✅ / B wins, A 2nd ✅</div>
+    </div>
+
+    <div class="exotic-card">
+      <div class="exotic-title">EXACTA</div>
+      <div class="exotic-text">Pick the 1st and 2nd place horses in exact finishing order. Higher payout than quinella but harder to win.</div>
+      <div class="strategy-tip" style="margin-bottom:10px">Reverse the exacta (A/B + B/A) for safety — costs double but covers both orders.</div>
+      <div class="exotic-example">Example: Horse A 1st, Horse B 2nd<br>Only A wins and B places 2nd ✅</div>
+    </div>
+
+    <div class="exotic-card">
+      <div class="exotic-title">TRIFECTA</div>
+      <div class="exotic-text">Pick 1st, 2nd, and 3rd in exact order. Large payouts possible but requires precision.</div>
+      <div class="strategy-tip" style="margin-bottom:10px">Use a "banker" — one horse you're very confident in as the winner. Then box or wheel the other two positions with 3–4 runners.</div>
+      <div class="exotic-example">Banker wheel: Fix A in 1st<br>Positions 2+3: B, C, D (6 combinations)</div>
+    </div>
+
+    <div class="exotic-card">
+      <div class="exotic-title">FIRST 4</div>
+      <div class="exotic-text">Pick the first 4 horses in exact order. Massive payouts but extremely difficult. Reserve for fields of 10+ with a clear top 4.</div>
+      <div class="strategy-tip" style="margin-bottom:10px">Box the top 5 Fair Value runners for a cost-effective approach to the First 4.</div>
+      <div class="exotic-example">5 horses boxed = 120 combinations<br>Cost = 120 × unit stake</div>
+    </div>
+
+    <div class="exotic-card">
+      <div class="exotic-title">MULTI / PARLAY</div>
+      <div class="exotic-text">Combine multiple single bets — all must win. Odds multiply but so does risk. One loss wipes the ticket.</div>
+      <div class="strategy-tip" style="margin-bottom:10px">Limit to 3-leg multis maximum. Only use STRONG or GOOD rated horses. Never include odds-on favourites — poor value.</div>
+      <div class="exotic-example">3-leg multi at $3 × $4 × $5 = $60<br>$1 stake returns $60 if all win</div>
+    </div>
+
+    <div class="exotic-card">
+      <div class="exotic-title">PLACE BETTING</div>
+      <div class="exotic-text">Horse must finish 1st, 2nd, or 3rd (in fields of 8+). Lower returns but significantly higher strike rate. Useful for building bankroll consistency.</div>
+      <div class="strategy-tip" style="margin-bottom:10px">Target horses with high Place % (50%+) and a Place fair value showing positive overlay. Lower risk, lower reward.</div>
+      <div class="exotic-example">Career Place % + Track Place %<br>Both above 45% = strong place candidate</div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "https://punting-lab-backend.onrender.com";
+
+let allOverlays = [];
+let allRaces    = [];
+let raceResults = {};
+let ws = null;
+let countdownInterval = null;
+let selectedPlan = 'flat';
+let betLog = JSON.parse(localStorage.getItem('betLog') || '[]');
+let bankrollData = JSON.parse(localStorage.getItem('bankrollData') || 'null');
+
+// ── INIT ────────────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", function() {
+  loadResultsFromDB();
+  fetchData();
+  connectWebSocket();
+  setInterval(fetchData, 60000);
+  startCountdownTick();
+  renderBetLog();
+  if (bankrollData) restoreBankroll();
+  document.getElementById("filter-rating").addEventListener("change", renderRaceCards);
+  document.getElementById("filter-track").addEventListener("change", renderRaceCards);
+  document.getElementById("filter-sort").addEventListener("change", renderRaceCards);
+});
+
+// ── NAVIGATION ──────────────────────────────────────────────────────────────
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  el.classList.add('active');
+  if (id === 'value') renderValueOverlays();
+}
+
+// ── WEBSOCKET ────────────────────────────────────────────────────────────────
+function connectWebSocket() {
+  try {
+    ws = new WebSocket("wss://punting-lab-backend.onrender.com/ws");
+    ws.onopen    = () => setStatus("green", "Live");
+    ws.onmessage = (e) => {
+      const d = JSON.parse(e.data);
+      if (d.overlays) { allOverlays = d.overlays; renderRaceCards(); updateSummaryCards(); populateTrackFilter(); }
+      if (d.weather)  renderWeather(d.weather);
+      if (d.last_updated) setUpdated(d.last_updated);
+    };
+    ws.onerror  = () => setStatus("red", "Error");
+    ws.onclose  = () => { setStatus("grey", "Reconnecting..."); setTimeout(connectWebSocket, 5000); };
+  } catch(e) { setStatus("red", "WS Error"); setTimeout(connectWebSocket, 5000); }
+}
+
+// ── FETCH ────────────────────────────────────────────────────────────────────
+function fetchData() {
+  fetch(API + "/api/overlays").then(r=>r.json()).then(d => {
+    allOverlays = d.overlays || [];
+    renderRaceCards(); updateSummaryCards(); populateTrackFilter();
+    if (d.last_updated) setUpdated(d.last_updated);
+    setStatus("green", "Live");
+  }).catch(() => setStatus("red", "Offline"));
+
+  fetch(API + "/api/weather").then(r=>r.json()).then(d => renderWeather(d.weather||{})).catch(()=>{});
+  fetch(API + "/api/status").then(r=>r.json()).then(d => document.getElementById("races-count").textContent = d.races_loaded||0).catch(()=>{});
+  fetch(API + "/api/races").then(r=>r.json()).then(d => { allRaces = d.races||[]; updateNextRaceBanner(); }).catch(()=>{});
+  loadAccuracy();
+}
+
+function loadResultsFromDB() {
+  fetch(API + "/api/results").then(r=>r.json()).then(d => {
+    (d.results||[]).forEach(r => {
+      raceResults[r.track+"_"+r.race_number] = { winner:r.winner, second:r.second, third:r.third };
+    });
+    renderRaceCards();
+  }).catch(()=>{});
+}
+
+function loadAccuracy() {
+  fetch(API + "/api/accuracy").then(r=>r.json()).then(d => {
+    if (d.total_races > 0) {
+      document.getElementById("accuracy-stats").style.display = "grid";
+      document.getElementById("acc-total").textContent    = d.total_races;
+      document.getElementById("acc-wins").textContent     = d.wins;
+      document.getElementById("acc-winrate").textContent  = d.win_rate + "%";
+      document.getElementById("acc-placerate").textContent= d.place_rate + "%";
+      document.getElementById("dash-winrate").textContent = d.win_rate + "%";
+    }
+  }).catch(()=>{});
+
+  fetch(API + "/api/results").then(r=>r.json()).then(d => {
+    const rows = d.results||[];
+    const tbody = document.getElementById("accuracy-tbody");
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">No results recorded yet.</td></tr>'; return; }
+    document.getElementById("accuracy-stats").style.display = "grid";
+    tbody.innerHTML = rows.map(r => {
+      const cls  = r.model_top_pick_won ? "result-win" : r.model_top_pick_placed ? "result-place" : "result-loss";
+      const txt  = r.model_top_pick_won ? "✅ WIN" : r.model_top_pick_placed ? "📍 PLACE" : r.model_top_pick ? "❌ LOSS" : "—";
+      return `<tr>
+        <td>${r.race_date||"--"}</td>
+        <td>${r.track||"--"}</td>
+        <td>R${r.race_number||"--"}</td>
+        <td><strong>${r.model_top_pick||"--"}</strong></td>
+        <td class="result-win">${r.winner||"--"}</td>
+        <td style="color:#c0c0c0">${r.second||"--"}</td>
+        <td style="color:#cd7f32">${r.third||"--"}</td>
+        <td class="${cls}">${txt}</td>
+      </tr>`;
+    }).join('');
+  }).catch(()=>{});
+}
+
+function manualRefresh() {
+  fetch(API + "/api/refresh", {method:"POST"}).then(()=>fetchData()).catch(()=>fetchData());
+  showToast("Refreshing data...", "success");
+}
+
+// ── COUNTDOWN ────────────────────────────────────────────────────────────────
+function startCountdownTick() {
+  if (countdownInterval) clearInterval(countdownInterval);
+  countdownInterval = setInterval(() => {
+    updateNextRaceBanner();
+    updateRaceTimers();
+    updateBetCardTimers();
+  }, 1000);
+}
+
+function parseRaceTime(t) {
+  if (!t || t === "00:00") return null;
+  const now = new Date(), [h,m] = t.split(":").map(Number);
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+}
+
+function secondsUntil(t) {
+  const d = parseRaceTime(t);
+  return d ? Math.floor((d - new Date()) / 1000) : null;
+}
+
+function isResulted(t) { const s = secondsUntil(t); return s !== null && s < -2700; }
+
+function formatCountdown(s) {
+  if (s <= 0) return "LIVE";
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+}
+
+function pad(n) { return n < 10 ? "0"+n : ""+n; }
+
+function timerClass(s) {
+  if (s <= 0)   return "live";
+  if (s <= 120) return "urgent";
+  if (s <= 600) return "soon";
+  return "";
+}
+
+function updateNextRaceBanner() {
+  if (!allRaces.length) return;
+  let nearest=null, nearestSecs=Infinity;
+  allRaces.forEach(r => {
+    const s = secondsUntil(r.race_time);
+    if (s !== null && s > -60 && s < nearestSecs) { nearestSecs=s; nearest=r; }
+  });
+  ['','2'].forEach(sfx => {
+    const bar = document.getElementById("next-race-bar"+sfx);
+    if (!nearest) { bar.classList.remove('visible'); return; }
+    bar.classList.add('visible');
+    document.getElementById("next-race-name"+sfx).textContent = nearest.track + " R" + nearest.race_number + " — " + (nearest.race_name||nearest.distance||"");
+    const el = document.getElementById("next-race-countdown"+sfx);
+    el.textContent = formatCountdown(nearestSecs);
+    el.className = "next-race-countdown " + timerClass(nearestSecs);
+  });
+}
+
+function updateRaceTimers() {
+  document.querySelectorAll(".race-timer[data-time]").forEach(el => {
+    const t = el.getAttribute("data-time");
+    if (isResulted(t)) { el.textContent = "RESULTED"; el.className = "race-timer resulted"; return; }
+    const s = secondsUntil(t);
+    if (s === null) return;
+    el.textContent = formatCountdown(s);
+    el.className = "race-timer " + timerClass(s);
+  });
+}
+
+function updateBetCardTimers() {
+  document.querySelectorAll(".bet-timer[data-time]").forEach(el => {
+    const s = secondsUntil(el.getAttribute("data-time"));
+    if (s === null) return;
+    el.textContent = formatCountdown(s);
+    el.className = "bet-timer " + timerClass(s);
+  });
+}
+
+// ── RACE CARDS ───────────────────────────────────────────────────────────────
+function renderRaceCards() {
+  const container   = document.getElementById("race-cards-container");
+  const ratingFilter= document.getElementById("filter-rating").value;
+  const trackFilter = document.getElementById("filter-track").value;
+  const sortBy      = document.getElementById("filter-sort").value;
+
+  const raceMap = {};
+  allOverlays.forEach(o => {
+    const key = o.track+"_"+o.race_number;
+    if (!raceMap[key]) raceMap[key] = {track:o.track, race_number:o.race_number, race_time:o.race_time, race_name:o.race_name||"", runners:[]};
+    raceMap[key].runners.push(o);
+  });
+
+  Object.values(raceMap).forEach(race => {
+    race.runners.sort((a,b) => {
+      if (sortBy==="overlay_score") return (b.overlay_score||0)-(a.overlay_score||0);
+      if (sortBy==="track_wins")    return parseFloat(b.track_wins||0)-parseFloat(a.track_wins||0);
+      return (b.fair_value||0)-(a.fair_value||0);
+    });
+  });
+
+  let sorted = Object.values(raceMap).sort((a,b) => {
+    const sa = secondsUntil(a.race_time)??9999, sb = secondsUntil(b.race_time)??9999;
+    return sa-sb;
+  });
+
+  let filtered = sorted.filter(race => {
+    if (trackFilter!=="ALL" && race.track!==trackFilter) return false;
+    if (ratingFilter!=="ALL") return race.runners.some(r=>r.rating===ratingFilter);
+    return true;
+  });
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div>No races found for current filters.</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(race => {
+    const secs     = secondsUntil(race.race_time);
+    const resulted = isResulted(race.race_time);
+    const timerCls = resulted ? "resulted" : timerClass(secs??9999);
+    const timerTxt = resulted ? "RESULTED" : (secs!==null ? formatCountdown(secs) : race.race_time);
+    const raceKey  = race.track+"_"+race.race_number;
+    const result   = raceResults[raceKey];
+    const runners  = ratingFilter==="ALL" ? race.runners : race.runners.filter(r=>r.rating===ratingFilter);
+
+    const rows = runners.map((o,j) => {
+      const rankCls  = j===0?"rank-1":j===1?"rank-2":j===2?"rank-3":"";
+      const badgeCls = j===0?"r1":j===1?"r2":j===2?"r3":"rn";
+      const isWinner = result?.winner?.toLowerCase() === (o.horse_name||"").toLowerCase();
+      const winStyle = isWinner ? 'style="background:rgba(34,197,94,0.05);border-left:3px solid var(--green)"' : '';
+      return `<tr class="${rankCls}" ${winStyle}>
+        <td><span class="rank-badge ${badgeCls}">${j+1}</span></td>
+        <td><span class="horse-name">${o.horse_name}</span>${isWinner?'<span class="winner-mark">✅</span>':''}</td>
+        <td>${o.barrier??'--'}</td>
+        <td style="color:var(--text2)">${o.jockey||'--'}</td>
+        <td>${formatForm(o.form_string||'')}</td>
+        <td class="${statClass(o.career_wins)}">${o.career_wins||'--'}</td>
+        <td class="${statClass(o.track_wins)}">${o.track_wins||'--'}</td>
+        <td class="${statClass(o.dist_wins)}">${o.dist_wins||'--'}</td>
+        <td class="fair-val">${o.fair_value!=null?o.fair_value.toFixed(1)+'%':'--'}</td>
+        <td class="fair-odds">${o.est_fair_odds!=null?'$'+o.est_fair_odds.toFixed(2):'--'}</td>
+        <td class="tote-odds">${o.tote_odds>0?'$'+o.tote_odds.toFixed(2):'--'}</td>
+        <td class="${(o.overlay_score||0)>0?'overlay-pos':'overlay-neg'}">${o.overlay_score!=null&&o.tote_odds>0?o.overlay_score.toFixed(2):'--'}</td>
+        <td><span class="badge ${(o.rating||'NONE').replace('/','')}">${o.rating||'N/A'}</span></td>
+      </tr>`;
+    }).join('');
+
+    const resultFooter = resulted ? `<div class="result-footer" id="result-footer-${raceKey}"></div>` : '';
+
+    return `<div class="race-block${resulted?' resulted-race':''}">
+      <div class="race-header">
+        <span class="race-track">${race.track}</span>
+        <span style="font-family:var(--font-mono);font-size:12px;color:var(--text3)">Race ${race.race_number}</span>
+        <span class="race-meta">${race.race_name}</span>
+        ${race.distance?`<span class="race-distance-badge">${race.distance}</span>`:''}
+        <span class="race-timer ${timerCls}" data-time="${race.race_time}">${timerTxt}</span>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th>#</th><th>Horse</th><th>Bar</th><th>Jockey</th><th>Form</th>
+          <th>Career W%</th><th>Track W%</th><th>Dist W%</th>
+          <th>Fair Val%</th><th>Fair Odds</th><th>Tote</th><th>Overlay</th><th>Rating</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      ${resultFooter}
+    </div>`;
+  }).join('');
+
+  filtered.forEach(race => {
+    if (isResulted(race.race_time)) renderResultFooter(race.track, race.race_number);
+  });
+}
+
+function formatForm(form) {
+  return form.split('').map(ch => {
+    if (ch==='1') return `<span class="form-char form-win">${ch}</span>`;
+    if (ch==='2'||ch==='3') return `<span class="form-char form-place">${ch}</span>`;
+    if (ch>='4'&&ch<='9') return `<span class="form-char form-miss">${ch}</span>`;
+    return ch;
+  }).join('');
+}
+
+function statClass(val) {
+  if (!val) return "";
+  const n = parseFloat(val);
+  if (n>=30) return "stat-hi";
+  if (n>=15) return "stat-mid";
+  return "stat-lo";
+}
+
+// ── RESULT FOOTER ────────────────────────────────────────────────────────────
+function renderResultFooter(track, raceNumber) {
+  const key = track+"_"+raceNumber;
+  const footer = document.getElementById("result-footer-"+key);
+  if (!footer) return;
+  const result = raceResults[key];
+  if (result) {
+    footer.innerHTML = `<div class="result-label">Result</div>
+      <span class="result-winner">🥇 ${result.winner}</span>
+      ${result.second?`<span style="color:#c0c0c0">🥈 ${result.second}</span>`:''}
+      ${result.third?`<span style="color:#cd7f32">🥉 ${result.third}</span>`:''}
+      <button class="result-enter-btn" onclick="showResultInput('${track}',${raceNumber})">Edit</button>`;
+  } else {
+    footer.innerHTML = `<div class="result-label">Result</div>
+      <span style="color:var(--text3)">Not entered yet</span>
+      <button class="result-enter-btn" onclick="showResultInput('${track}',${raceNumber})">+ Enter Result</button>`;
+  }
+}
+
+function showResultInput(track, raceNumber) {
+  const key = track+"_"+raceNumber;
+  const footer = document.getElementById("result-footer-"+key);
+  if (!footer) return;
+  footer.innerHTML = `<div class="result-input-row">
+    <input class="result-input" id="winner-${key}" placeholder="1st place..."/>
+    <input class="result-input" id="second-${key}" placeholder="2nd..." style="max-width:140px"/>
+    <input class="result-input" id="third-${key}"  placeholder="3rd..." style="max-width:140px"/>
+    <button class="result-save-btn" onclick="submitResult('${track}',${raceNumber})">Save</button>
+    <button class="result-cancel-btn" onclick="renderResultFooter('${track}',${raceNumber})">✕</button>
+  </div>`;
+  document.getElementById("winner-"+key)?.focus();
+}
+
+function submitResult(track, raceNumber) {
+  const key = track+"_"+raceNumber;
+  const winner = document.getElementById("winner-"+key)?.value.trim()||"";
+  const second = document.getElementById("second-"+key)?.value.trim()||"";
+  const third  = document.getElementById("third-"+key)?.value.trim()||"";
+  if (!winner) return;
+  raceResults[key] = {winner, second, third};
+  renderResultFooter(track, raceNumber);
+  fetch(API+"/api/results", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({track,race_number:raceNumber,winner,second,third})}).catch(()=>{});
+  showToast("Result saved ✅", "success");
+  loadAccuracy();
+}
+
+// ── SUMMARY CARDS ────────────────────────────────────────────────────────────
+function updateSummaryCards() {
+  let strong=0, good=0;
+  allOverlays.forEach(o => { if(o.rating==="STRONG")strong++; if(o.rating==="GOOD")good++; });
+  document.getElementById("runners-count").textContent = allOverlays.length;
+  document.getElementById("strong-count").textContent  = strong;
+  document.getElementById("good-count").textContent    = good;
+  renderBestBets();
+  renderValueOverlays();
+}
+
+// ── BEST BETS ────────────────────────────────────────────────────────────────
+function renderBestBets() {
+  const section = document.getElementById("best-bets-section");
+  const grid    = document.getElementById("best-bets-grid");
+  if (!allOverlays.length) { section.style.display="none"; return; }
+
+  const seen={}, top5=[];
+  allOverlays.slice().sort((a,b)=>(b.fair_value||0)-(a.fair_value||0)).forEach(o => {
+    const k = o.track+"_"+o.race_number;
+    if (seen[k]||isResulted(o.race_time)) return;
+    seen[k]=true; top5.push(o);
+  });
+  if (top5.length > 5) top5.length = 5;
+  if (!top5.length) { section.style.display="none"; return; }
+  section.style.display = "block";
+
+  const rankLabels  = ["🥇 Top Pick","🥈 2nd Pick","🥉 3rd Pick","4th Pick","5th Pick"];
+  const rankClasses = ["rank-1","rank-2","rank-3","rank-4","rank-5"];
+
+  grid.innerHTML = top5.map((o,i) => {
+    const secs = secondsUntil(o.race_time);
+    const tTxt = secs!==null ? formatCountdown(secs) : o.race_time;
+    const tCls = timerClass(secs??9999);
+    const fvCls= (o.fair_value||0)>=20?"good":(o.fair_value||0)>=12?"warn":"";
+    const twCls= parseFloat(o.track_wins||0)>=25?"good":parseFloat(o.track_wins||0)>=12?"warn":"";
+    return `<div class="bet-card ${rankClasses[i]}">
+      <div class="bet-rank ${i===0?'r1':''}">${rankLabels[i]}</div>
+      <div class="bet-horse">${o.horse_name}</div>
+      <div class="bet-race">${o.track} R${o.race_number} · ${o.race_time}</div>
+      <div class="bet-stats">
+        <div><div class="bet-stat-label">Fair Val</div><div class="bet-stat-val ${fvCls}">${o.fair_value!=null?o.fair_value.toFixed(1)+'%':'--'}</div></div>
+        <div><div class="bet-stat-label">Fair Odds</div><div class="bet-stat-val">${o.est_fair_odds!=null?'$'+o.est_fair_odds.toFixed(2):'--'}</div></div>
+        <div><div class="bet-stat-label">Track W%</div><div class="bet-stat-val ${twCls}">${o.track_wins||'--'}</div></div>
+        <div><div class="bet-stat-label">Dist W%</div><div class="bet-stat-val">${o.dist_wins||'--'}</div></div>
+      </div>
+      <div class="bet-footer">
+        <span>${formatForm(o.form_string||'')}</span>
+        <span class="bet-timer ${tCls}" data-time="${o.race_time}">${tTxt}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── WEATHER ──────────────────────────────────────────────────────────────────
+function renderWeather(weather) {
+  const grid = document.getElementById("weather-grid");
+  const section = document.getElementById("weather-section");
+  const entries = Object.values(weather);
+  if (!entries.length) { section.style.display="none"; return; }
+  section.style.display = "block";
+  grid.innerHTML = entries.map(w => `
+    <div class="weather-card">
+      <div class="weather-track">${w.track}</div>
+      <div class="weather-stat"><span class="weather-stat-label">🌡️ Temp</span><span class="weather-stat-val">${w.temperature}°C</span></div>
+      <div class="weather-stat"><span class="weather-stat-label">💧 Humidity</span><span class="weather-stat-val">${w.humidity}%</span></div>
+      <div class="weather-stat"><span class="weather-stat-label">💨 Wind</span><span class="weather-stat-val">${w.wind_speed} km/h</span></div>
+      <div class="weather-stat"><span class="weather-stat-label">☁️ Conditions</span><span class="weather-stat-val">${w.conditions}</span></div>
+    </div>`).join('');
+}
+
+// ── TRACK FILTER ────────────────────────────────────────────────────────────
+function populateTrackFilter() {
+  const select = document.getElementById("filter-track");
+  const current = select.value;
+  const tracks = [...new Set(allOverlays.map(o=>o.track).filter(Boolean))];
+  select.innerHTML = '<option value="ALL">All Tracks</option>' +
+    tracks.map(t=>`<option value="${t}"${t===current?' selected':''}>${t}</option>`).join('');
+}
+
+// ── VALUE FINDER ────────────────────────────────────────────────────────────
+function calcValue() {
+  const horse    = document.getElementById("vf-horse").value.trim()||"Horse";
+  const odds     = parseFloat(document.getElementById("vf-odds").value)||0;
+  const prob     = parseFloat(document.getElementById("vf-prob").value)||0;
+  const career   = parseFloat(document.getElementById("vf-career").value)||0;
+  const track    = parseFloat(document.getElementById("vf-track").value)||0;
+  const dist     = parseFloat(document.getElementById("vf-dist").value)||0;
+
+  if (!odds || !prob) { showToast("Enter odds and win probability", "error"); return; }
+
+  let fairProb = prob/100;
+  if (career>0) fairProb = (fairProb + career/100 + (track>0?track/100:fairProb) + (dist>0?dist/100:fairProb)) / 4;
+  fairProb = Math.min(fairProb, 0.95);
+
+  const fairOdds    = fairProb>0 ? (1/fairProb) : 99;
+  const impliedProb = 1/odds;
+  const overlay     = ((fairProb - impliedProb)*100).toFixed(2);
+  const rating      = parseFloat(overlay)>=10?"STRONG":parseFloat(overlay)>=6?"GOOD":parseFloat(overlay)>=2?"MARGINAL":"NONE";
+
+  const advice = {
+    STRONG:   "Strong value bet. Odds are significantly better than fair value. Consider staking 2–3 units.",
+    GOOD:     "Good overlay. Worth betting at standard stake. Monitor for market moves.",
+    MARGINAL: "Marginal value. Consider a reduced stake or wait for better odds.",
+    NONE:     "No value at current odds. The market has this horse correctly priced or overpriced. Skip this one."
+  };
+
+  document.getElementById("vf-result").style.display = "block";
+  document.getElementById("vf-res-horse").textContent  = horse;
+  document.getElementById("vf-res-fv").textContent     = (fairProb*100).toFixed(1)+"%";
+  document.getElementById("vf-res-fv").style.color     = "var(--gold2)";
+  document.getElementById("vf-res-overlay").textContent = overlay;
+  document.getElementById("vf-res-overlay").className   = "value-score "+(parseFloat(overlay)>0?"pos":"neg");
+  document.getElementById("vf-res-fairodds").textContent = "$"+fairOdds.toFixed(2);
+  document.getElementById("vf-res-rating").innerHTML   = `<span class="badge ${rating}">${rating}</span>`;
+  document.getElementById("vf-res-advice").textContent  = advice[rating];
+  document.getElementById("vf-result-card").className   = "value-result-card"+(parseFloat(overlay)>=6?" high-value":"");
+}
+
+function renderValueOverlays() {
+  const container = document.getElementById("value-overlays-list");
+  const top = allOverlays.filter(o => (o.overlay_score||0)>0 && !isResulted(o.race_time))
+    .sort((a,b)=>(b.overlay_score||0)-(a.overlay_score||0)).slice(0,15);
+
+  if (!top.length) { container.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>No overlays detected yet.<br>Data loads when tote odds are available.</div>'; return; }
+
+  container.innerHTML = top.map(o => `
+    <div class="value-result-card${(o.overlay_score||0)>=6?' high-value':''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div>
+          <div style="font-weight:700">${o.horse_name}</div>
+          <div style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">${o.track} R${o.race_number} · ${o.race_time}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="value-score ${(o.overlay_score||0)>0?'pos':'neg'}" style="font-size:22px">${(o.overlay_score||0).toFixed(2)}</div>
+          <span class="badge ${(o.rating||'NONE').replace('/','')}">${o.rating||'N/A'}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:16px;font-size:12px;color:var(--text3)">
+        <span>Fair: <strong style="color:var(--text)">${o.fair_value!=null?o.fair_value.toFixed(1)+'%':'--'}</strong></span>
+        <span>Tote: <strong style="color:var(--teal)">${o.tote_odds>0?'$'+o.tote_odds.toFixed(2):'--'}</strong></span>
+        <span>Fair Odds: <strong style="color:var(--gold)">${o.est_fair_odds!=null?'$'+o.est_fair_odds.toFixed(2):'--'}</strong></span>
+      </div>
+    </div>`).join('');
+}
+
+// ── BANKROLL ────────────────────────────────────────────────────────────────
+function saveBankroll() {
+  const starting = parseFloat(document.getElementById("br-starting").value)||0;
+  const current  = parseFloat(document.getElementById("br-current").value)||starting;
+  const limit    = parseFloat(document.getElementById("br-limit").value)||0;
+  if (!starting) { showToast("Enter starting bankroll", "error"); return; }
+  bankrollData = {starting, current, limit};
+  localStorage.setItem('bankrollData', JSON.stringify(bankrollData));
+  restoreBankroll();
+  document.getElementById("dash-bankroll").textContent = "$"+current.toFixed(0);
+  showToast("Bankroll saved ✅", "success");
+  updateSuggestedStake();
+}
+
+function restoreBankroll() {
+  if (!bankrollData) return;
+  document.getElementById("br-starting").value = bankrollData.starting;
+  document.getElementById("br-current").value  = bankrollData.current;
+  document.getElementById("br-limit").value    = bankrollData.limit;
+  document.getElementById("br-display").style.display = "block";
+  document.getElementById("dash-bankroll").textContent = "$"+bankrollData.current.toFixed(0);
+
+  const pnl = bankrollData.current - bankrollData.starting;
+  const roi = bankrollData.starting>0 ? (pnl/bankrollData.starting*100).toFixed(1) : 0;
+  const pct = Math.min(bankrollData.current/bankrollData.starting*100, 200);
+
+  document.getElementById("br-pnl").textContent = (pnl>=0?"+":"") + "$"+pnl.toFixed(2);
+  document.getElementById("br-pnl").style.color = pnl>=0?"var(--green)":"var(--red)";
+  document.getElementById("br-roi").textContent = (roi>=0?"+":"") + roi + "%";
+  document.getElementById("br-roi").style.color = roi>=0?"var(--green)":"var(--red)";
+  document.getElementById("br-pct").textContent = pct.toFixed(0)+"%";
+  document.getElementById("br-bar").style.width = Math.min(pct,100)+"%";
+  document.getElementById("br-bar").className   = "progress-bar"+(pct<80?" warn":"");
+  updateSuggestedStake();
+}
+
+function selectPlan(plan) {
+  selectedPlan = plan;
+  document.querySelectorAll('.staking-plan').forEach(p => p.classList.remove('active'));
+  document.getElementById("plan-"+plan).classList.add('active');
+  const advice = {
+    flat:  "Flat staking is recommended for beginners. Keep stakes consistent until you have 50+ bets of data.",
+    pct:   "Stake 2–5% of current bankroll per bet. Naturally scales up in profit and down after losses.",
+    level: "STRONG = 3 units, GOOD = 2 units, MARGINAL = 1 unit. Scale your confidence into your stake size."
+  };
+  document.getElementById("plan-advice").textContent = advice[plan];
+  updateSuggestedStake();
+}
+
+function updateSuggestedStake() {
+  if (!bankrollData) return;
+  const el = document.getElementById("suggested-stake");
+  const valEl = document.getElementById("suggested-stake-val");
+  let stake = 0;
+  if (selectedPlan==="flat")  stake = bankrollData.starting * 0.02;
+  if (selectedPlan==="pct")   stake = bankrollData.current  * 0.03;
+  if (selectedPlan==="level") stake = bankrollData.current  * 0.01;
+  el.style.display = "block";
+  valEl.textContent = "$"+stake.toFixed(2);
+}
+
+function logBet() {
+  const horse   = document.getElementById("bet-horse").value.trim();
+  const stake   = parseFloat(document.getElementById("bet-stake").value)||0;
+  const odds    = parseFloat(document.getElementById("bet-odds").value)||0;
+  const outcome = document.getElementById("bet-outcome").value;
+  if (!horse || !stake || !odds) { showToast("Fill in all bet fields", "error"); return; }
+
+  const profit = outcome==="win" ? stake*(odds-1) : outcome==="loss" ? -stake : 0;
+  const bet = { horse, stake, odds, outcome, profit, date: new Date().toLocaleDateString() };
+  betLog.unshift(bet);
+  localStorage.setItem('betLog', JSON.stringify(betLog));
+
+  if (bankrollData && outcome!=="pending") {
+    bankrollData.current += profit;
+    localStorage.setItem('bankrollData', JSON.stringify(bankrollData));
+    restoreBankroll();
+  }
+
+  document.getElementById("bet-horse").value  = "";
+  document.getElementById("bet-stake").value  = "";
+  document.getElementById("bet-odds").value   = "";
+  renderBetLog();
+  showToast("Bet logged ✅", "success");
+}
+
+function renderBetLog() {
+  const el = document.getElementById("bet-log");
+  if (!betLog.length) { el.innerHTML = '<div class="empty" style="padding:20px"><div class="empty-icon">📋</div>No bets logged yet</div>'; return; }
+  el.innerHTML = betLog.slice(0,30).map(b => `
+    <div class="bet-log-item">
+      <div>
+        <div style="font-weight:600;font-size:13px">${b.horse}</div>
+        <div style="font-size:11px;color:var(--text3)">${b.date} · $${b.stake} @ $${b.odds}</div>
+      </div>
+      <div class="${b.outcome==='win'?'bet-log-win':b.outcome==='loss'?'bet-log-loss':''}" style="font-family:var(--font-mono);font-size:13px">
+        ${b.outcome==="pending"?"PENDING":b.outcome==="win"?"+$"+b.profit.toFixed(2):"-$"+Math.abs(b.profit).toFixed(2)}
+      </div>
+    </div>`).join('');
+}
+
+// ── STATUS / UI HELPERS ──────────────────────────────────────────────────────
+function setUpdated(ts) {
+  const el = document.getElementById("last-updated");
+  const pill = document.getElementById("last-updated-pill");
+  el.textContent = "Updated " + new Date(ts).toLocaleTimeString();
+  pill.style.display = "flex";
+}
+
+function setStatus(color, text) {
+  document.getElementById("status-dot").className  = "status-dot " + color;
+  document.getElementById("status-text").textContent = text;
+}
+
+function showToast(msg, type="success") {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast show " + type;
+  setTimeout(() => t.className = "toast", 3000);
+}
+</script>
+</body>
 </html>

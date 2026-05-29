@@ -1,187 +1,142 @@
-import aiohttp
-import asyncio
-from datetime import datetime, timezone
+import time
+import json
+import csv
+import random
+from datetime import datetime
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 
-BASE_URL = "https://api.formfav.com"
-API_KEY = "fk_7854bdf2477c56c2f75e453489bd9ee867209c06d00494df960bf4d3d2b65da1"
+class RacingScraper:
+    def __init__(self, target_url):
+        self.target_url = target_url
+        self.options = Options()
+        # Headless mode recommended for production, comment out for debugging
+        # self.options.add_argument("--headless") 
+        self.options.add_argument("--no-sandbox")
+        self.options.add_argument("--disable-dev-shm-usage")
+        self.options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
+        
+        self.driver = webdriver.Chrome(
+            service=Service(ChromeDriverManager().install()),
+            options=self.options
+        )
+        self.wait = WebDriverWait(self.driver, 20)
 
-HEADERS = {"X-API-Key": API_KEY}
+    def scrape_meeting_data(self):
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Navigating to {self.target_url}...")
+        try:
+            self.driver.get(self.target_url)
+            
+            # Handle cookie consent or popups if present
+            self.handle_popups()
 
-async def get_meetings(date: str) -> list:
-    url = f"{BASE_URL}/v1/form/meetings"
-    params = {"date": date, "race_code": "gallops"}
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=HEADERS, params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                if resp.status != 200:
-                    print(f"[Meetings] API error {resp.status}")
-                    return []
-                data = await resp.json()
-                meetings = data.get("meetings", [])
-                au_meetings = [m for m in meetings if m and m.get("country") == "au" and not m.get("abandoned")]
-                print(f"[Meetings] Found {len(au_meetings)} AU meetings")
-                return au_meetings
-    except Exception as e:
-        print(f"[Meetings] Error: {e}")
-        return []
+            # Wait for the main odds table to be present
+            self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, "form-table")))
+            
+            # Scroll to bottom to trigger lazy loading if necessary
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
+            time.sleep(2)
 
-async def get_race_form(date: str, track_slug: str, race_number: int) -> dict:
-    url = f"{BASE_URL}/v1/form"
-    params = {
-        "date": date,
-        "track": track_slug,
-        "race": str(race_number),
-        "race_code": "gallops",
-        "country": "au"
-    }
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=HEADERS, params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                if resp.status != 200:
-                    print(f"[Form] API error {resp.status} for {track_slug} R{race_number}")
-                    return {}
-                data = await resp.json()
-                return data if isinstance(data, dict) else {}
-    except Exception as e:
-        print(f"[Form] Error {track_slug} R{race_number}: {e}")
-        return {}
+            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+            
+            meeting_name = soup.select_one(".meeting-header__title").text.strip() if soup.select_one(".meeting-header__title") else "Unknown Meeting"
+            race_info = soup.select_one(".race-header__race-number").text.strip() if soup.select_one(".race-header__race-number") else "Race X"
+            
+            results = []
+            
+            # Target the horse rows in the form table
+            horse_rows = soup.select("tr.form-table__row")
+            
+            for row in horse_rows:
+                try:
+                    horse_num = row.select_one(".form-table__horse-number").text.strip()
+                    horse_name = row.select_one(".form-table__horse-name").text.strip()
+                    jockey_trainer = row.select_one(".form-table__jockey-trainer").text.strip().split('/')
+                    jockey = jockey_trainer[0].strip()
+                    trainer = jockey_trainer[1].strip() if len(jockey_trainer) > 1 else "N/A"
+                    
+                    # Live Odds extraction (Win/Place)
+                    # Note: Selectors may change based on site updates
+                    win_odds = row.select_one(".odds-button--win").text.strip() if row.select_one(".odds-button--win") else "N/A"
+                    place_odds = row.select_one(".odds-button--place").text.strip() if row.select_one(".odds-button--place") else "N/A"
 
-def parse_form_string(form: str):
-    if not form:
-        return None
-    for ch in reversed(form):
-        if ch.isdigit():
-            return int(ch)
-    return None
+                    entry = {
+                        "timestamp": datetime.now().isoformat(),
+                        "meeting": meeting_name,
+                        "race": race_info,
+                        "horse_number": horse_num,
+                        "horse_name": horse_name,
+                        "jockey": jockey,
+                        "trainer": trainer,
+                        "win_odds": win_odds,
+                        "place_odds": place_odds
+                    }
+                    results.append(entry)
+                except Exception as e:
+                    continue # Skip malformed rows
+            
+            return results
 
-def parse_runners(runners: list, condition: str) -> list:
-    horses = []
-    for r in runners:
-        if not r or not isinstance(r, dict):
-            continue
-        if r.get("scratched"):
-            continue
-        stats = r.get("stats") or {}
-        overall = stats.get("overall") or {}
-        track_stats = stats.get("track") or {}
-        distance_stats = stats.get("distance") or {}
-        condition_stats = stats.get("condition") or {}
+        except Exception as e:
+            print(f"Error during extraction: {str(e)}")
+            return None
 
-        horses.append({
-            "horse_name": r.get("name") or "Unknown",
-            "barrier": r.get("barrier") or 0,
-            "jockey": r.get("jockey") or "",
-            "trainer": r.get("trainer") or "",
-            "weight": r.get("weight") or 56.0,
-            "tote_odds": 0.0,
-            "fixed_odds": 0.0,
-            "last_finish": parse_form_string(r.get("form") or ""),
-            "days_since_last_run": None,
-            "condition": condition,
-            "win_percent": overall.get("winPercent") or 0.0,
-            "place_percent": overall.get("placePercent") or 0.0,
-            "track_win_percent": track_stats.get("winPercent") or 0.0,
-            "distance_win_percent": distance_stats.get("winPercent") or 0.0,
-            "condition_win_percent": condition_stats.get("winPercent") or 0.0,
-            "career_starts": overall.get("starts") or 0,
-            "form_string": r.get("form") or "",
-        })
-    return horses
+    def handle_popups(self):
+        # Basic popup handling logic
+        try:
+            close_buttons = self.driver.find_elements(By.CLASS_NAME, "close-button")
+            for btn in close_buttons:
+                if btn.is_displayed():
+                    btn.click()
+        except:
+            pass
 
-async def get_race_fields() -> list:
-    today = datetime.now().strftime("%Y-%m-%d")
-    print(f"[Scraper] Fetching meetings for {today}")
+    def save_to_csv(self, data, filename="racing_odds.csv"):
+        keys = data[0].keys()
+        file_exists = False
+        try:
+            with open(filename, 'r') as f:
+                file_exists = True
+        except FileNotFoundError:
+            pass
 
-    meetings = await get_meetings(today)
-    if not meetings:
-        print("[Scraper] No meetings found, using mock data")
-        return get_mock_races()
+        with open(filename, 'a', newline='') as output_file:
+            dict_writer = csv.DictWriter(output_file, fieldnames=keys)
+            if not file_exists:
+                dict_writer.writeheader()
+            dict_writer.writerows(data)
 
-    races = []
-    for meeting in meetings:
-        if not meeting or not isinstance(meeting, dict):
-            continue
+    def run_monitor(self, interval_seconds=30):
+        print(f"Starting monitor on {self.target_url}")
+        print(f"Refresh Interval: {interval_seconds}s")
+        
+        try:
+            while True:
+                data = self.scrape_meeting_data()
+                if data:
+                    print(f"Successfully scraped {len(data)} horses. Saving data...")
+                    self.save_to_csv(data)
+                
+                # Randomize sleep to avoid detection
+                jitter = random.uniform(-2.0, 5.0)
+                sleep_time = max(5, interval_seconds + jitter)
+                print(f"Sleeping for {round(sleep_time, 2)}s...")
+                time.sleep(sleep_time)
+                
+        except KeyboardInterrupt:
+            print("\nMonitoring stopped by user.")
+        finally:
+            self.driver.quit()
 
-        slug = meeting.get("slug") or ""
-        track = meeting.get("track") or "Unknown"
-        meeting_races = meeting.get("races") or []
-
-        if not slug:
-            continue
-
-        for race_info in meeting_races:
-            if not race_info or not isinstance(race_info, dict):
-                continue
-            if race_info.get("abandoned"):
-                continue
-
-            race_number = race_info.get("raceNumber")
-            if not race_number:
-                continue
-
-            condition = race_info.get("condition") or "Good"
-            distance = race_info.get("distance") or "Unknown"
-            race_name = race_info.get("raceName") or ""
-            start_time = race_info.get("startTime") or ""
-
-            try:
-                dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-                race_time = dt.astimezone().strftime("%H:%M")
-            except:
-                race_time = "00:00"
-
-            form_data = await get_race_form(today, slug, race_number)
-            if not form_data:
-                print(f"[Scraper] No form data for {track} R{race_number}, skipping")
-                continue
-
-            runners = form_data.get("runners") or []
-            if not runners:
-                print(f"[Scraper] No runners for {track} R{race_number}, skipping")
-                continue
-
-            horses = parse_runners(runners, condition)
-            if not horses:
-                continue
-
-            race_id = f"{slug}_{race_number}_{today}"
-            races.append({
-                "race_id": race_id,
-                "track": track,
-                "race_number": race_number,
-                "race_name": race_name,
-                "race_time": race_time,
-                "distance": distance,
-                "condition": condition,
-                "horses": horses,
-            })
-            print(f"[Scraper] Loaded {track} R{race_number} — {len(horses)} runners")
-            await asyncio.sleep(0.3)
-
-    if not races:
-        print("[Scraper] No races parsed, using mock data")
-        return get_mock_races()
-
-    print(f"[Scraper] Total: {len(races)} races loaded from FormFav API")
-    return races
-
-def get_mock_races() -> list:
-    return [{
-        "race_id": "flemington_1_mock",
-        "track": "Flemington",
-        "race_number": 1,
-        "race_name": "Mock Race",
-        "race_time": "12:30",
-        "distance": "1200m",
-        "condition": "Good",
-        "horses": get_mock_horses(),
-    }]
-
-def get_mock_horses() -> list:
-    return [
-        {"horse_name": "Thunder Strike", "barrier": 1, "jockey": "J. McDonald", "trainer": "C. Waller", "weight": 57.0, "tote_odds": 3.5, "fixed_odds": 3.2, "last_finish": 1, "days_since_last_run": 14, "win_percent": 0.40, "place_percent": 0.70, "track_win_percent": 0.50, "distance_win_percent": 0.45, "condition_win_percent": 0.40, "career_starts": 20, "form_string": "11211", "condition": "Good"},
-        {"horse_name": "Silver Arrow", "barrier": 3, "jockey": "D. Oliver", "trainer": "L. Freedman", "weight": 56.5, "tote_odds": 5.0, "fixed_odds": 4.8, "last_finish": 2, "days_since_last_run": 21, "win_percent": 0.30, "place_percent": 0.60, "track_win_percent": 0.35, "distance_win_percent": 0.30, "condition_win_percent": 0.30, "career_starts": 15, "form_string": "21321", "condition": "Good"},
-        {"horse_name": "Golden Star", "barrier": 5, "jockey": "H. Bowman", "trainer": "G. Waterhouse", "weight": 55.0, "tote_odds": 8.0, "fixed_odds": 7.5, "last_finish": 3, "days_since_last_run": 7, "win_percent": 0.20, "place_percent": 0.50, "track_win_percent": 0.25, "distance_win_percent": 0.20, "condition_win_percent": 0.20, "career_starts": 18, "form_string": "32413", "condition": "Good"},
-        {"horse_name": "Dark Knight", "barrier": 7, "jockey": "K. McEvoy", "trainer": "T. Noonan", "weight": 58.0, "tote_odds": 12.0, "fixed_odds": 11.0, "last_finish": 5, "days_since_last_run": 35, "win_percent": 0.15, "place_percent": 0.40, "track_win_percent": 0.10, "distance_win_percent": 0.15, "condition_win_percent": 0.15, "career_starts": 22, "form_string": "54325", "condition": "Good"},
-        {"horse_name": "Storm Chaser", "barrier": 2, "jockey": "R. Mallyon", "trainer": "P. Moody", "weight": 54.5, "tote_odds": 6.5, "fixed_odds": 6.0, "last_finish": 4, "days_since_last_run": 28, "win_percent": 0.25, "place_percent": 0.55, "track_win_percent": 0.30, "distance_win_percent": 0.25, "condition_win_percent": 0.25, "career_starts": 12, "form_string": "43214", "condition": "Good"},
-    ]
+if __name__ == "__main__":
+    # EXAMPLE URL: Replace with actual meeting URL
+    URL = "https://www.racing.com/form/2026-05-24/caulfield/race/1"
+    
+    scraper = RacingScraper(URL)
+    scraper.run_monitor(interval_seconds=30)
