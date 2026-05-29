@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
 function connectWebSocket() {
     try {
-        ws = new WebSocket("ws://localhost:8000/ws");
+        ws = new WebSocket("wss://punting-lab-backend.onrender.com/ws");
         ws.onopen = function() { setStatus("green", "Live"); };
         ws.onmessage = function(event) {
             var data = JSON.parse(event.data);
@@ -61,12 +61,13 @@ function fetchData() {
         .catch(function() {});
 
     fetch(API + "/api/status")
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-                document.getElementById("races-count").textContent = d.races_loaded || 0;
-            })
-            .catch(function() {})
-            loadAccuracy();
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            document.getElementById("races-count").textContent = d.races_loaded || 0;
+        })
+        .catch(function() {});
+
+    loadAccuracy();
 
     fetch(API + "/api/races")
         .then(function(r) { return r.json(); })
@@ -74,7 +75,21 @@ function fetchData() {
         .catch(function() {});
 }
 
-function loadResultsFromDB()
+function loadResultsFromDB() {
+    fetch(API + "/api/results")
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var results = data.results || [];
+            for (var i = 0; i < results.length; i++) {
+                var r = results[i];
+                var key = r.track + "_" + r.race_number;
+                raceResults[key] = { winner: r.winner, second: r.second, third: r.third };
+            }
+            renderRaceCards();
+        })
+        .catch(function() {});
+}
+
 function loadAccuracy() {
     fetch(API + "/api/accuracy")
         .then(function(r) { return r.json(); })
@@ -121,19 +136,6 @@ function loadAccuracy() {
                     '</tr>';
             }
             tbody.innerHTML = html;
-        })
-        .catch(function() {});
-} {
-    fetch(API + "/api/results")
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            var results = data.results || [];
-            for (var i = 0; i < results.length; i++) {
-                var r = results[i];
-                var key = r.track + "_" + r.race_number;
-                raceResults[key] = { winner: r.winner, second: r.second, third: r.third };
-            }
-            renderRaceCards();
         })
         .catch(function() {});
 }
