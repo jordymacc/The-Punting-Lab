@@ -10,7 +10,7 @@ from typing import List
 from database import init_db, get_db, Race, Horse, WeatherData, RaceResult
 from overlay_model import process_race
 from scraper import get_race_fields
-from racing_com_scraper import scrape_live_odds, inject_odds
+sed -i 's/from racing_com_scraper import scrape_live_odds, inject_odds/try:\n    from racing_com_scraper import scrape_live_odds, inject_odds\nexcept Exception as e:\n    print(f"[Odds] Import failed: {e}")\n    async def scrape_live_odds(*a, **kw): return {}\n    def inject_odds(r, o): return r/' backend/backend-new/main.py
 
 app = FastAPI(title="Horse Racing Overlay API v2.0", version="2.0.0")
 
