@@ -4,6 +4,7 @@ sqlalchemy
 aiohttp
 playwright
 beautifulsoup4
+bs4
 pandas
 structlog
 pydantic
