@@ -57,9 +57,9 @@ manager = ConnectionManager()
 # ── Startup: init DB and load race data ──────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
-    import subprocess
     try:
-        subprocess.run(["playwright", "install", "chromium"], check=True)
+        import subprocess, sys
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
         print("[Startup] Chromium installed")
     except Exception as e:
         print(f"[Startup] Chromium install failed: {e}")
