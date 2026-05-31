@@ -1,22 +1,42 @@
+
+fixed_main_py = '''import asyncio
+import json
 import uvicorn
-import asyncio
-from datetime import datetime
-from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect
+from datetime import datetime, timedelta
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from sqlalchemy.orm import Session
-from typing import List
+import structlog
+from config import config
 
-from database import init_db, get_db, Race, Horse, WeatherData, RaceResult
+# ── Database ──────────────────────────────────────────────────────
+from database import (
+    init_db, SessionLocal, Race, Horse, WeatherData, RaceResult, get_db
+)
+
+# ── Agents & Overlay Engine ─────────────────────────────────────
+from agents import state as agent_state, start_all_agents, consensus
 from overlay_model import process_race
+from weather import get_all_track_weather
 from scraper import get_race_fields
-try:
-    from racing_com_scraper import scrape_live_odds, inject_odds
-except Exception as e:
-    print(f"[Odds] Import failed: {e}")
-    async def scrape_live_odds(*a, **kw): return {}
-    def inject_odds(r, o): return r
-app = FastAPI(title="Horse Racing Overlay API v2.0", version="2.0.0")
+
+# ── Prediction / Strategy / Metrics ───────────────────────────────
+from prediction_tracker import prediction_tracker, RacePrediction, HorsePrediction
+from racing_metrics import racing_tracker
+from betting_strategy import BettingStrategyEngine
+
+# ── Monitoring ────────────────────────────────────────────────────
+from monitoring import monitor, get_metrics_response, get_health_status
+
+# ═════════════════════════════════════════════════════════════════
+# FASTAPI APP
+# ═════════════════════════════════════════════════════════════════
+
+app = FastAPI(
+    title="The Punting Lab API",
+    version="3.0.0",
+    description="Horse racing overlay, predictions & betting strategy"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,282 +46,483 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── In-memory cache ──────────────────────────────────────────────────────────
-cached_overlays = []
-cached_races = []
-cached_weather = {}
-last_updated = None
+# Strategy engine (lazy init)
+strategy_engine = None
 
-# ── WebSocket connection manager ─────────────────────────────────────────────
-class ConnectionManager:
-    def __init__(self):
-        self.active: List[WebSocket] = []
+# WebSocket connections
+active_connections: list[WebSocket] = []
 
-    async def connect(self, ws: WebSocket):
-        await ws.accept()
-        self.active.append(ws)
 
-    def disconnect(self, ws: WebSocket):
-        if ws in self.active:
-            self.active.remove(ws)
+# ═════════════════════════════════════════════════════════════════
+# STARTUP / SHUTDOWN
+# ═════════════════════════════════════════════════════════════════
 
-    async def broadcast(self, data: dict):
-        for ws in list(self.active):
-            try:
-                await ws.send_json(data)
-            except Exception:
-                self.disconnect(ws)
-
-manager = ConnectionManager()
-
-# ── Startup: init DB and load race data ──────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
-    import subprocess, sys
-    try:
-        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], 
-                      check=True, timeout=120)
-        print("[Startup] Chromium installed")
-    except Exception as e:
-        print(f"[Startup] Chromium install failed: {e}")
+    global strategy_engine
+
+    # Database
     init_db()
-    asyncio.create_task(background_refresh_delayed())
-    asyncio.create_task(run_initial_refresh())
 
-async def run_initial_refresh():
-    await asyncio.sleep(2)
-    await refresh_race_data()
+    # Structured logging
+    structlog.configure(
+        processors=[structlog.processors.JSONRenderer()],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+    )
 
-async def background_refresh_delayed():
-    await asyncio.sleep(620)
-    while True:
-        await refresh_race_data()
-        await manager.broadcast({"overlays": cached_overlays, "weather": cached_weather, "last_updated": last_updated})
-        await asyncio.sleep(600)
+    # Strategy engine
+    strategy_engine = BettingStrategyEngine(prediction_tracker)
 
-async def refresh_race_data():
-    global cached_overlays, cached_races, last_updated
-    try:
-        races = await get_race_fields()
+    # Start background agents (scraper, weather, overlays, etc.)
+    asyncio.create_task(start_all_agents())
 
-        # ── inject live odds from Racing.com ──────────────────────────────
-        try:
-            odds_map = await scrape_live_odds("https://www.racing.com/todays-racing")
-            if odds_map:
-                races = inject_odds(races, odds_map)
-        except Exception as oe:
-            print(f"[Odds] Skipping live odds injection: {oe}")
-        overlays = []
-        race_list = []
+    print("=" * 60)
+    print("🚀  THE PUNTING LAB API v3.0")
+    print("=" * 60)
 
-        for race in races:
-            horses = race.get("horses", [])
-            weather = cached_weather.get(race.get("track", ""), None)
-            results = process_race(horses, weather)
 
-            for r in results:
-                overlays.append({
-                    **r,
-                    "track": race["track"],
-                    "race_number": race["race_number"],
-                    "race_name": race.get("race_name", ""),
-                    "race_time": race["race_time"],
-                    "race_date": race.get("race_date", ""),
-                    "distance": race.get("distance", ""),
-                })
-
-            race_list.append({
-                "track": race["track"],
-                "race_number": race["race_number"],
-                "race_name": race.get("race_name", ""),
-                "race_time": race["race_time"],
-                "race_date": race.get("race_date", ""),
-                "distance": race.get("distance", ""),
-            })
-
-        cached_overlays = overlays
-        cached_races = race_list
-        last_updated = datetime.utcnow().isoformat()
-        print(f"[Refresh] {len(cached_races)} races, {len(cached_overlays)} runners loaded")
-    except Exception as e:
-        print(f"[Refresh] Error: {e}")
-
-# ── Routes ────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════
+# ROOT & HEALTH
+# ═════════════════════════════════════════════════════════════════
 
 @app.get("/")
 async def root():
     return {
-        "message": "🏇 Horse Racing Overlay API v2.0",
+        "message": "🏇 The Punting Lab API v3.0",
         "status": "live",
-        "features": ["predictions", "strategies", "analytics"],
-        "docs": "/docs"
+        "features": [
+            "overlays", "races", "weather", "results",
+            "predictions", "strategies", "analytics", "ws"
+        ],
+        "docs": "/docs",
     }
+
 
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "version": "2.0.0"
-    }
+    return get_health_status()
+
+
+# ═════════════════════════════════════════════════════════════════
+# CORE API — what the frontend actually calls
+# ═════════════════════════════════════════════════════════════════
 
 @app.get("/api/overlays")
 async def get_overlays():
+    """Return all overlay-ranked runners + AI consensus picks."""
     return {
-        "overlays": cached_overlays,
-        "last_updated": last_updated,
+        "overlays": agent_state.get("overlays", []),
+        "ai_picks": agent_state.get("ai_picks", []),
+        "last_updated": agent_state.get("last_updated"),
     }
+
 
 @app.get("/api/races")
 async def get_races():
-    return {"races": cached_races}
+    """Return raw race fields (with horses)."""
+    return {"races": agent_state.get("races", [])}
 
-@app.get("/api/status")
-async def get_status():
-    return {
-        "status": "live",
-        "races_loaded": len(cached_races),
-        "runners_loaded": len(cached_overlays),
-        "last_updated": last_updated,
-    }
 
 @app.get("/api/weather")
 async def get_weather():
-    return {"weather": cached_weather}
+    """Return latest track weather."""
+    return {"weather": agent_state.get("weather", {})}
 
-@app.get("/api/results")
-async def get_results(db: Session = Depends(get_db)):
-    rows = db.query(RaceResult).order_by(RaceResult.entered_at.desc()).all()
-    results = []
-    for r in rows:
-        results.append({
-            "race_id": r.race_id,
-            "track": r.track,
-            "race_number": r.race_number,
-            "race_date": r.race_date,
-            "winner": r.winner,
-            "second": r.second,
-            "third": r.third,
-            "model_top_pick": r.model_top_pick,
-            "model_top_pick_won": r.model_top_pick_won,
-            "model_top_pick_placed": r.model_top_pick_placed,
-        })
-    return {"results": results}
 
-@app.post("/api/results")
-async def post_result(payload: dict, db: Session = Depends(get_db)):
-    track = payload.get("track", "")
-    race_number = payload.get("race_number", 0)
-    winner = payload.get("winner", "")
-    second = payload.get("second", "")
-    third = payload.get("third", "")
-    today = datetime.now().strftime("%Y-%m-%d")
-    race_id = f"{track}_{race_number}_{today}"
-
-    # Find model's top pick for this race from cached overlays
-    top_pick = None
-    for o in cached_overlays:
-        if o["track"] == track and o["race_number"] == race_number:
-            top_pick = o["horse_name"]
-            break
-
-    won = top_pick and top_pick.lower() == winner.lower() if top_pick else False
-    placed = top_pick and top_pick.lower() in [winner.lower(), second.lower(), third.lower()] if top_pick else False
-
-    existing = db.query(RaceResult).filter(RaceResult.race_id == race_id).first()
-    if existing:
-        existing.winner = winner
-        existing.second = second
-        existing.third = third
-        existing.model_top_pick = top_pick
-        existing.model_top_pick_won = won
-        existing.model_top_pick_placed = placed
-    else:
-        db.add(RaceResult(
-            race_id=race_id,
-            track=track,
-            race_number=race_number,
-            race_date=today,
-            winner=winner,
-            second=second,
-            third=third,
-            model_top_pick=top_pick,
-            model_top_pick_won=won,
-            model_top_pick_placed=placed,
-        ))
-    db.commit()
-    return {"status": "saved"}
-
-@app.get("/api/accuracy")
-async def get_accuracy(db: Session = Depends(get_db)):
-    rows = db.query(RaceResult).all()
-    total = len(rows)
-    if total == 0:
-        return {"total_races": 0, "wins": 0, "places": 0, "win_rate": 0, "place_rate": 0}
-    wins = sum(1 for r in rows if r.model_top_pick_won)
-    places = sum(1 for r in rows if r.model_top_pick_placed)
+@app.get("/api/status")
+async def get_status():
+    """Quick system status for the frontend header."""
     return {
-        "total_races": total,
-        "wins": wins,
-        "places": places,
-        "win_rate": round(wins / total * 100, 1),
-        "place_rate": round(places / total * 100, 1),
+        "status": agent_state.get("status", "unknown"),
+        "races_loaded": len(agent_state.get("races", [])),
+        "overlays_loaded": len(agent_state.get("overlays", [])),
+        "last_updated": agent_state.get("last_updated"),
     }
 
-@app.post("/api/refresh")
-async def manual_refresh():
-    await refresh_race_data()
-    return {"status": "refreshed", "races": len(cached_races), "runners": len(cached_overlays)}
+
+# ═════════════════════════════════════════════════════════════════
+# RESULTS (single + bulk)
+# ═════════════════════════════════════════════════════════════════
+
+@app.get("/api/results")
+async def get_results():
+    """Return all entered race results."""
+    db = SessionLocal()
+    try:
+        rows = db.query(RaceResult).order_by(RaceResult.entered_at.desc()).all()
+        return {
+            "results": [
+                {
+                    "race_id": r.race_id,
+                    "track": r.track,
+                    "race_number": r.race_number,
+                    "race_date": r.race_date,
+                    "winner": r.winner,
+                    "second": r.second,
+                    "third": r.third,
+                    "model_top_pick": getattr(r, "model_top_pick", None),
+                    "model_top_pick_won": getattr(r, "model_top_pick_won", False),
+                    "model_top_pick_placed": getattr(r, "model_top_pick_placed", False),
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/results")
+async def post_result(data: dict):
+    """Save a single race result."""
+    db = SessionLocal()
+    try:
+        race_id = f"{data['track']}_{data['race_number']}_{datetime.now().strftime('%Y-%m-%d')}"
+        # Upsert
+        existing = db.query(RaceResult).filter(RaceResult.race_id == race_id).first()
+        if existing:
+            existing.winner = data.get("winner", "")
+            existing.second = data.get("second", "")
+            existing.third = data.get("third", "")
+            existing.entered_at = datetime.utcnow()
+        else:
+            db.add(RaceResult(
+                race_id=race_id,
+                track=data["track"],
+                race_number=data["race_number"],
+                race_date=datetime.now().strftime("%Y-%m-%d"),
+                winner=data.get("winner", ""),
+                second=data.get("second", ""),
+                third=data.get("third", ""),
+            ))
+        db.commit()
+
+        # Broadcast to WebSocket clients
+        await broadcast({"type": "result_saved", "race_id": race_id})
+        return {"success": True}
+    except Exception as e:
+        db.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
+
+
+@app.post("/api/bulk-results")
+async def post_bulk_results(data: dict):
+    """Save multiple results at once (from bulk.html)."""
+    db = SessionLocal()
+    saved = 0
+    skipped = 0
+    try:
+        for r in data.get("results", []):
+            race_id = f"{r['track']}_{r['race_number']}_{r['race_date']}"
+            if db.query(RaceResult).filter(RaceResult.race_id == race_id).first():
+                skipped += 1
+                continue
+            db.add(RaceResult(
+                race_id=race_id,
+                track=r["track"],
+                race_number=r["race_number"],
+                race_date=r["race_date"],
+                winner=r.get("winner", ""),
+                second=r.get("second", ""),
+                third=r.get("third", ""),
+            ))
+            saved += 1
+        db.commit()
+        return {"success": True, "saved": saved, "skipped": skipped}
+    except Exception as e:
+        db.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
+
+
+# ═════════════════════════════════════════════════════════════════
+# ACCURACY
+# ═════════════════════════════════════════════════════════════════
+
+@app.get("/api/accuracy")
+async def get_accuracy():
+    """Model accuracy vs entered results."""
+    db = SessionLocal()
+    try:
+        results = db.query(RaceResult).all()
+        if not results:
+            return {"total": 0, "wins": 0, "places": 0, "win_rate": 0, "place_rate": 0}
+
+        total = len(results)
+        wins = sum(1 for r in results if r.model_top_pick_won)
+        places = sum(1 for r in results if r.model_top_pick_placed)
+
+        return {
+            "total": total,
+            "wins": wins,
+            "places": places,
+            "win_rate": round(wins / total * 100, 1) if total else 0,
+            "place_rate": round(places / total * 100, 1) if total else 0,
+        }
+    finally:
+        db.close()
+
+
+# ═════════════════════════════════════════════════════════════════
+# PREDICTIONS (advanced analytics)
+# ═════════════════════════════════════════════════════════════════
+
+@app.get("/predictions/accuracy")
+async def get_prediction_accuracy():
+    return prediction_tracker.get_overall_accuracy()
+
+
+@app.get("/predictions/analysis")
+async def get_prediction_analysis():
+    return {
+        "overall": prediction_tracker.get_overall_accuracy(),
+        "by_conditions": prediction_tracker.get_accuracy_by_conditions(),
+        "confidence_analysis": prediction_tracker.get_confidence_analysis(),
+        "recent_trend": prediction_tracker.get_recent_performance_trend(days=14),
+    }
+
+
+@app.get("/predictions/performance/{days}")
+async def get_recent_performance(days: int):
+    return prediction_tracker.get_recent_performance_trend(days)
+
+
+@app.post("/predictions/record")
+async def record_prediction(race_data: dict):
+    try:
+        horses = [HorsePrediction(**h) for h in race_data.get("horses", [])]
+        race_pred = RacePrediction(
+            race_id=race_data["race_id"],
+            track=race_data["track"],
+            race_time=datetime.fromisoformat(race_data["race_time"]),
+            race_type=race_data.get("race_type", "unknown"),
+            distance=race_data.get("distance", 0),
+            surface=race_data.get("surface", "unknown"),
+            weather=race_data.get("weather", "unknown"),
+            field_size=race_data.get("field_size", len(horses)),
+            prediction_time=datetime.now(),
+            horses=horses,
+            predicted_winner=race_data["predicted_winner"],
+            predicted_quinella=race_data.get("predicted_quinella", []),
+            predicted_trifecta=race_data.get("predicted_trifecta", []),
+        )
+        prediction_tracker.record_prediction(race_pred)
+        return {"success": True, "race_id": race_data["race_id"]}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/predictions/result")
+async def record_race_result(result_data: dict):
+    try:
+        prediction_tracker.record_race_result(
+            race_id=result_data["race_id"],
+            results=result_data["results"],
+        )
+        return {"success": True, "race_id": result_data["race_id"]}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ═════════════════════════════════════════════════════════════════
+# STRATEGY
+# ═════════════════════════════════════════════════════════════════
+
+@app.post("/strategy/analyze-race")
+async def analyze_race_strategy(race_data: dict):
+    try:
+        horses = [HorsePrediction(**h) for h in race_data.get("horses", [])]
+        race_pred = RacePrediction(
+            race_id=race_data["race_id"],
+            track=race_data["track"],
+            race_time=datetime.fromisoformat(race_data["race_time"]),
+            race_type=race_data.get("race_type", "unknown"),
+            distance=race_data.get("distance", 0),
+            surface=race_data.get("surface", "unknown"),
+            weather=race_data.get("weather", "unknown"),
+            field_size=race_data.get("field_size", len(horses)),
+            prediction_time=datetime.now(),
+            horses=horses,
+            predicted_winner=race_data["predicted_winner"],
+            predicted_quinella=race_data.get("predicted_quinella", []),
+            predicted_trifecta=race_data.get("predicted_trifecta", []),
+        )
+        strategy = strategy_engine.analyze_race_strategy(race_pred)
+        from dataclasses import asdict
+        return asdict(strategy)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/strategy/bankroll-advice")
+async def get_bankroll_advice():
+    return strategy_engine.get_bankroll_management_advice()
+
+
+@app.post("/strategy/set-bankroll")
+async def set_bankroll(data: dict):
+    try:
+        amount = data.get("amount")
+        if amount and amount > 0:
+            strategy_engine.set_bankroll(amount)
+            return {"success": True, "new_bankroll": amount}
+        return {"error": "Invalid bankroll amount"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/strategy/performance-summary")
+async def get_strategy_performance():
+    overall = prediction_tracker.get_overall_accuracy()
+    conditions = prediction_tracker.get_accuracy_by_conditions()
+    return {
+        "overall_performance": overall,
+        "performance_by_conditions": conditions,
+        "strategy_recommendations": {
+            "conservative_situations": "When track accuracy < 20%",
+            "aggressive_situations": "When track accuracy > 30% and ROI > 5%",
+            "value_hunting_situations": "When overlays > 30% regardless of accuracy",
+        },
+    }
+
+
+# ═════════════════════════════════════════════════════════════════
+# RACING METRICS
+# ═════════════════════════════════════════════════════════════════
+
+@app.get("/metrics/racing")
+async def racing_metrics():
+    return racing_tracker.get_performance_summary()
+
+
+@app.get("/metrics/racing/sources")
+async def scraping_source_health():
+    sources = {}
+    for source, metrics in racing_tracker.scraping_metrics.items():
+        freshness = racing_tracker.get_data_freshness(source)
+        success_rate = racing_tracker.get_scraping_success_rate(source)
+        status = "healthy"
+        if success_rate < 0.8:
+            status = "warning"
+        if success_rate < 0.5 or (freshness and freshness > 300):
+            status = "critical"
+        sources[source] = {
+            "status": status,
+            "success_rate": success_rate,
+            "freshness_seconds": freshness,
+            "average_response_time": metrics.average_response_time,
+            "data_quality": metrics.data_quality_score,
+        }
+    return sources
+
+
+# ═════════════════════════════════════════════════════════════════
+# WEBSOCKET — real-time broadcast
+# ═════════════════════════════════════════════════════════════════
+
+async def broadcast(message: dict):
+    """Send JSON to all connected WebSocket clients."""
+    dead = []
+    for ws in active_connections:
+        try:
+            await ws.send_json(message)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        if ws in active_connections:
+            active_connections.remove(ws)
+
 
 @app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    await manager.connect(ws)
-    try:
-        # Send current data immediately on connect
-        await ws.send_json({
-            "overlays": cached_overlays,
-            "weather": cached_weather,
-            "last_updated": last_updated,
-        })
-        while True:
-            await ws.receive_text()  # keep connection alive
-    except WebSocketDisconnect:
-        manager.disconnect(ws)
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    active_connections.append(websocket)
+    racing_tracker.track_websocket_connection(True)
 
-@app.get("/dashboard/strategy")
+    # Send current state immediately
+    await websocket.send_json({
+        "type": "init",
+        "races_loaded": len(agent_state.get("races", [])),
+        "overlays_loaded": len(agent_state.get("overlays", [])),
+        "status": agent_state.get("status", "unknown"),
+    })
+
+    try:
+        while True:
+            msg = await websocket.receive_text()
+            # Echo or handle commands
+            if msg == "ping":
+                await websocket.send_text("pong")
+            else:
+                await websocket.send_json({"type": "echo", "message": msg})
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if websocket in active_connections:
+            active_connections.remove(websocket)
+        racing_tracker.track_websocket_connection(False)
+
+
+# ═════════════════════════════════════════════════════════════════
+# DASHBOARDS (HTML pages served from same backend)
+# ═════════════════════════════════════════════════════════════════
+
+@app.get("/dashboard/strategy", response_class=HTMLResponse)
 async def strategy_dashboard():
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Strategy Dashboard</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .card { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; }
-        </style>
-    </head>
-    <body>
-        <h1>🎯 AI Betting Strategy Dashboard</h1>
-        <div class="card">
-            <h2>Status</h2>
-            <p>✅ API is working!</p>
-        </div>
-        <div class="card">
-            <h2>Available Endpoints</h2>
-            <ul>
-                <li><a href="/docs">API Documentation</a></li>
-                <li><a href="/api/overlays">Overlays</a></li>
-                <li><a href="/api/races">Races</a></li>
-                <li><a href="/api/status">Status</a></li>
-                <li><a href="/api/weather">Weather</a></li>
-                <li><a href="/api/results">Results</a></li>
-                <li><a href="/api/accuracy">Accuracy</a></li>
-            </ul>
-        </div>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html)
+    try:
+        with open("strategy_dashboard.html", "r") as f:
+            html = f.read()
+            return HTMLResponse(content=html)
+    except FileNotFoundError:
+        return HTMLResponse("<h1>Strategy Dashboard</h1><p>File not found</p>")
+
+
+@app.get("/dashboard/predictions", response_class=HTMLResponse)
+async def prediction_dashboard():
+    try:
+        with open("prediction_dashboard.html", "r") as f:
+            html = f.read()
+            return HTMLResponse(content=html)
+    except FileNotFoundError:
+        return HTMLResponse("<h1>Prediction Dashboard</h1><p>File not found</p>")
+
+
+@app.get("/dashboard/monitoring", response_class=HTMLResponse)
+async def monitoring_dashboard():
+    try:
+        with open("monitoring_dashboard.html", "r") as f:
+            html = f.read()
+            return HTMLResponse(content=html)
+    except FileNotFoundError:
+        return HTMLResponse("<h1>Monitoring Dashboard</h1><p>File not found</p>")
+
+
+# ═════════════════════════════════════════════════════════════════
+# PROMETHEUS METRICS
+# ═════════════════════════════════════════════════════════════════
+
+@app.get("/metrics")
+async def prometheus_metrics():
+    return get_metrics_response()
+
+
+# ═════════════════════════════════════════════════════════════════
+# ENTRY POINT
+# ═════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(
+        "main:app",
+        host=config.HOST,
+        port=config.PORT,
+        reload=config.RELOAD,
+    )
+'''
+
+with open('/mnt/agents/output/main.py', 'w') as f:
+    f.write(fixed_main_py)
+
+print("✅ Fixed main.py written to /mnt/agents/output/main.py")
+print(f"📄 File size: {len(fixed_main_py)} chars, {len(fixed_main_py.splitlines())} lines")
