@@ -2,7 +2,7 @@ import asyncio
 import json
 import uvicorn
 from datetime import datetime, timedelta
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import structlog
@@ -14,7 +14,6 @@ from overlay_model import process_race
 from weather import get_all_track_weather
 from scraper import get_race_fields
 
-# Try to import Racing.com scraper, but don't crash if it fails
 try:
     from racing_com_scraper import racing_com_scraper
     RACING_COM_AVAILABLE = True
@@ -24,7 +23,6 @@ except ImportError:
 
 app = FastAPI(title="The Punting Lab API", version="3.3.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
-active_connections = []
 
 @app.on_event("startup")
 async def startup_event():
@@ -35,8 +33,6 @@ async def startup_event():
     except Exception as e: print(f"Logging warning: {e}")
     try: asyncio.create_task(start_all_agents())
     except Exception as e: print(f"Agents warning: {e}")
-    
-    # Start Racing.com odds agent ONLY if available and working
     if RACING_COM_AVAILABLE and racing_com_scraper:
         try:
             from racing_com_agent import racing_com_odds_agent
@@ -44,7 +40,6 @@ async def startup_event():
             print("[Startup] Racing.com odds agent started")
         except Exception as e:
             print(f"[Startup] Racing.com agent skipped: {e}")
-    
     print("=" * 60)
     print("THE PUNTING LAB API v3.3")
     print("=" * 60)
@@ -52,14 +47,12 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     if RACING_COM_AVAILABLE and racing_com_scraper:
-        try:
-            await racing_com_scraper.close()
-        except:
-            pass
+        try: await racing_com_scraper.close()
+        except: pass
 
 @app.get("/")
 async def root():
-    return {"message": "The Punting Lab API v3.3", "status": "live", "features": ["overlays", "races", "weather", "results", "ws", "racing-com-odds"], "docs": "/docs", "racing_com_available": RACING_COM_AVAILABLE}
+    return {"message": "The Punting Lab API v3.3", "status": "live", "features": ["overlays", "races", "weather", "results", "racing-com-odds"], "docs": "/docs", "racing_com_available": RACING_COM_AVAILABLE}
 
 @app.get("/health")
 async def health_check():
@@ -69,10 +62,8 @@ async def health_check():
 async def get_overlays():
     overlays = agent_state.get("overlays", [])
     if RACING_COM_AVAILABLE and racing_com_scraper and racing_com_scraper.odds_cache:
-        try:
-            overlays = racing_com_scraper.merge_with_overlays(overlays)
-        except Exception as e:
-            print(f"[Overlays] Racing.com merge failed: {e}")
+        try: overlays = racing_com_scraper.merge_with_overlays(overlays)
+        except Exception as e: print(f"[Overlays] Racing.com merge failed: {e}")
     return {"overlays": overlays, "ai_picks": agent_state.get("ai_picks", []), "last_updated": agent_state.get("last_updated"), "live_odds_available": RACING_COM_AVAILABLE and racing_com_scraper and racing_com_scraper.last_update is not None}
 
 @app.get("/api/races")
@@ -93,46 +84,38 @@ async def get_accuracy():
 
 @app.get("/api/racing-com/meetings")
 async def get_racing_com_meetings():
-    if not RACING_COM_AVAILABLE:
-        return {"error": "Racing.com scraper not available", "meetings": []}
+    if not RACING_COM_AVAILABLE: return {"error": "Racing.com scraper not available", "meetings": []}
     try:
         meetings = await racing_com_scraper.scrape_meetings()
         return {"meetings": meetings, "count": len(meetings)}
-    except Exception as e:
-        return {"error": str(e), "meetings": []}
+    except Exception as e: return {"error": str(e), "meetings": []}
 
 @app.get("/api/racing-com/race-odds")
 async def get_racing_com_race_odds(url: str):
-    if not RACING_COM_AVAILABLE:
-        return {"error": "Racing.com scraper not available"}
+    if not RACING_COM_AVAILABLE: return {"error": "Racing.com scraper not available"}
     try:
         odds = await racing_com_scraper.scrape_race_odds(url)
         return odds
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception as e: return {"error": str(e)}
 
 @app.get("/api/racing-com/all-odds")
 async def get_racing_com_all_odds():
-    if not RACING_COM_AVAILABLE:
-        return {"error": "Racing.com scraper not available"}
+    if not RACING_COM_AVAILABLE: return {"error": "Racing.com scraper not available"}
     try:
         all_odds = await racing_com_scraper.scrape_all_odds()
         return {"odds": all_odds, "race_count": len(all_odds), "last_update": racing_com_scraper.last_update.isoformat() if racing_com_scraper.last_update else None}
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception as e: return {"error": str(e)}
 
 @app.get("/api/racing-com/merged-overlays")
 async def get_racing_com_merged_overlays():
     overlays = agent_state.get("overlays", [])
-    if not RACING_COM_AVAILABLE:
-        return {"error": "Racing.com scraper not available", "overlays": overlays}
+    if not RACING_COM_AVAILABLE: return {"error": "Racing.com scraper not available", "overlays": overlays}
     try:
         if not racing_com_scraper.odds_cache or (racing_com_scraper.last_update and (datetime.now() - racing_com_scraper.last_update).seconds > 300):
             await racing_com_scraper.scrape_all_odds()
         merged = racing_com_scraper.merge_with_overlays(overlays)
         return {"overlays": merged, "ai_picks": agent_state.get("ai_picks", []), "last_updated": agent_state.get("last_updated"), "odds_last_update": racing_com_scraper.last_update.isoformat() if racing_com_scraper.last_update else None}
-    except Exception as e:
-        return {"error": str(e), "overlays": overlays}
+    except Exception as e: return {"error": str(e), "overlays": overlays}
 
 @app.get("/api/results")
 async def get_results():
@@ -140,8 +123,7 @@ async def get_results():
     try:
         rows = db.query(RaceResult).order_by(RaceResult.entered_at.desc()).all()
         return {"results": [{"race_id": r.race_id, "track": r.track, "race_number": r.race_number, "race_date": r.race_date, "winner": r.winner, "second": r.second, "third": r.third} for r in rows]}
-    finally:
-        db.close()
+    finally: db.close()
 
 @app.post("/api/results")
 async def post_result(data: dict):
@@ -157,13 +139,11 @@ async def post_result(data: dict):
         else:
             db.add(RaceResult(race_id=race_id, track=data["track"], race_number=data["race_number"], race_date=datetime.now().strftime("%Y-%m-%d"), winner=data.get("winner", ""), second=data.get("second", ""), third=data.get("third", "")))
         db.commit()
-        await broadcast({"type": "result_saved", "race_id": race_id})
         return {"success": True}
     except Exception as e:
         db.rollback()
         return {"success": False, "error": str(e)}
-    finally:
-        db.close()
+    finally: db.close()
 
 @app.post("/api/bulk-results")
 async def post_bulk_results(data: dict):
@@ -183,37 +163,7 @@ async def post_bulk_results(data: dict):
     except Exception as e:
         db.rollback()
         return {"success": False, "error": str(e)}
-    finally:
-        db.close()
-
-async def broadcast(message: dict):
-    dead = []
-    for ws in active_connections:
-        try:
-            await ws.send_json(message)
-        except Exception:
-            dead.append(ws)
-    for ws in dead:
-        if ws in active_connections:
-            active_connections.remove(ws)
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    active_connections.append(websocket)
-    await websocket.send_json({"type": "init", "races_loaded": len(agent_state.get("races", [])), "overlays_loaded": len(agent_state.get("overlays", [])), "status": agent_state.get("status", "unknown"), "live_odds_available": RACING_COM_AVAILABLE and racing_com_scraper and racing_com_scraper.last_update is not None})
-    try:
-        while True:
-            msg = await websocket.receive_text()
-            if msg == "ping":
-                await websocket.send_text("pong")
-            else:
-                await websocket.send_json({"type": "echo", "message": msg})
-    except WebSocketDisconnect:
-        pass
-    finally:
-        if websocket in active_connections:
-            active_connections.remove(websocket)
+    finally: db.close()
 
 @app.get("/dashboard/strategy", response_class=HTMLResponse)
 async def strategy_dashboard():
