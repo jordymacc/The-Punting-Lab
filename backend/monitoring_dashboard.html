@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Punting Lab - System Monitor</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .card { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .metric { display: inline-block; margin: 10px; padding: 15px; background: #e3f2fd; border-radius: 4px; }
+        .metric.warning { background: #fff3e0; }
+        .metric.error { background: #ffebee; }
+        .status-healthy { color: green; font-weight: bold; }
+        .status-warning { color: orange; font-weight: bold; }
+        .status-error { color: red; font-weight: bold; }
+        .refresh-btn { padding: 10px 20px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏇 Punting Lab - System Monitor</h1>
+        
+        <div class="card">
+            <h2>System Health</h2>
+            <button class="refresh-btn" onclick="refreshData()">Refresh Data</button>
+            <div id="health-status">Loading...</div>
+        </div>
+        
+        <div class="card">
+            <h2>Performance Metrics</h2>
+            <div id="performance-metrics">Loading...</div>
+        </div>
+        
+        <div class="card">
+            <h2>Real-time Logs</h2>
+            <div id="logs" style="height: 300px; overflow-y: auto; background: #f9f9f9; padding: 10px; font-family: monospace;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://punting-lab-backend.onrender.com';  // Update with your URL
+        
+        async function fetchHealthStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                displayHealthStatus(data);
+            } catch (error) {
+                document.getElementById('health-status').innerHTML = 
+                    '<span class="status-error">❌ Unable to connect to backend</span>';
+            }
+        }
+        
+        function displayHealthStatus(data) {
+            const statusClass = data.status === 'healthy' ? 'status-healthy' : 'status-error';
+            const uptime = formatUptime(data.uptime_seconds);
+            
+            document.getElementById('health-status').innerHTML = `
+                <div class="metric">
+                    <strong>Status:</strong> <span class="${statusClass}">
+                        ${data.status === 'healthy' ? '✅' : '❌'} ${data.status.toUpperCase()}
+                    </span>
+                </div>
+                <div class="metric">
+                    <strong>Uptime:</strong> ${uptime}
+                </div>
+                <div class="metric">
+                    <strong>Active Requests:</strong> ${data.active_requests}
+                </div>
+                <div class="metric ${data.system.cpu_percent > 80 ? 'error' : data.system.cpu_percent > 60 ? 'warning' : ''}">
+                    <strong>CPU:</strong> ${data.system.cpu_percent.toFixed(1)}%
+                </div>
+                <div class="metric ${data.system.memory_percent > 80 ? 'error' : data.system.memory_percent > 60 ? 'warning' : ''}">
+                    <strong>Memory:</strong> ${data.system.memory_percent.toFixed(1)}%
+                </div>
+                <div class="metric ${data.system.disk_percent > 80 ? 'error' : data.system.disk_percent > 60 ? 'warning' : ''}">
+                    <strong>Disk:</strong> ${data.system.disk_percent.toFixed(1)}%
+                </div>
+            `;
+        }
+        
+        function formatUptime(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return `${days}d ${hours}h ${minutes}m`;
+        }
+        
+        function refreshData() {
+            fetchHealthStatus();
+            addLog('📊 Dashboard refreshed');
+        }
+        
+        function addLog(message) {
+            const logsDiv = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            logsDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+        
+        // Auto-refresh every 30 seconds
+        setInterval(refreshData, 30000);
+        
+        // Initial load
+        fetchHealthStatus();
+        addLog('🚀 Monitoring dashboard started');
+    </script>
+</body>
+</html>
