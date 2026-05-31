@@ -19,9 +19,6 @@ from overlay_model import process_race
 from weather import get_all_track_weather
 from scraper import get_race_fields
 
-# ── Monitoring ────────────────────────────────────────────────────
-from monitoring import monitor, get_metrics_response, get_health_status
-
 # ═════════════════════════════════════════════════════════════════
 # FASTAPI APP
 # ═════════════════════════════════════════════════════════════════
@@ -63,7 +60,7 @@ async def startup_event():
     asyncio.create_task(start_all_agents())
 
     print("=" * 60)
-    print("🚀  THE PUNTING LAB API v3.0 (Minimal)")
+    print("🚀  THE PUNTING LAB API v3.0")
     print("=" * 60)
 
 
@@ -85,7 +82,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return get_health_status()
+    return {"status": "healthy"}
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -289,15 +286,6 @@ async def monitoring_dashboard():
             return HTMLResponse(content=f.read())
     except FileNotFoundError:
         return HTMLResponse("<h1>Monitoring Dashboard</h1><p>File not found</p>")
-
-
-# ═════════════════════════════════════════════════════════════════
-# PROMETHEUS METRICS
-# ═════════════════════════════════════════════════════════════════
-
-@app.get("/metrics")
-async def prometheus_metrics():
-    return get_metrics_response()
 
 
 # ═════════════════════════════════════════════════════════════════
