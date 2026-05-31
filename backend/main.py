@@ -14,6 +14,7 @@ from overlay_model import process_race
 from weather import get_all_track_weather
 from scraper import get_race_fields
 
+# Try to import Racing.com scraper, but don't crash if it fails
 try:
     from racing_com_scraper import racing_com_scraper
     RACING_COM_AVAILABLE = True
@@ -34,20 +35,27 @@ async def startup_event():
     except Exception as e: print(f"Logging warning: {e}")
     try: asyncio.create_task(start_all_agents())
     except Exception as e: print(f"Agents warning: {e}")
-    if RACING_COM_AVAILABLE:
+    
+    # Start Racing.com odds agent ONLY if available and working
+    if RACING_COM_AVAILABLE and racing_com_scraper:
         try:
             from racing_com_agent import racing_com_odds_agent
             asyncio.create_task(racing_com_odds_agent())
             print("[Startup] Racing.com odds agent started")
-        except Exception as e: print(f"Racing.com agent warning: {e}")
+        except Exception as e:
+            print(f"[Startup] Racing.com agent skipped: {e}")
+    
     print("=" * 60)
-    print("THE PUNTING LAB API v3.3 (with Racing.com Live Odds)")
+    print("THE PUNTING LAB API v3.3")
     print("=" * 60)
 
 @app.on_event("shutdown")
 async def shutdown_event():
     if RACING_COM_AVAILABLE and racing_com_scraper:
-        await racing_com_scraper.close()
+        try:
+            await racing_com_scraper.close()
+        except:
+            pass
 
 @app.get("/")
 async def root():
@@ -61,7 +69,10 @@ async def health_check():
 async def get_overlays():
     overlays = agent_state.get("overlays", [])
     if RACING_COM_AVAILABLE and racing_com_scraper and racing_com_scraper.odds_cache:
-        overlays = racing_com_scraper.merge_with_overlays(overlays)
+        try:
+            overlays = racing_com_scraper.merge_with_overlays(overlays)
+        except Exception as e:
+            print(f"[Overlays] Racing.com merge failed: {e}")
     return {"overlays": overlays, "ai_picks": agent_state.get("ai_picks", []), "last_updated": agent_state.get("last_updated"), "live_odds_available": RACING_COM_AVAILABLE and racing_com_scraper and racing_com_scraper.last_update is not None}
 
 @app.get("/api/races")
@@ -82,30 +93,46 @@ async def get_accuracy():
 
 @app.get("/api/racing-com/meetings")
 async def get_racing_com_meetings():
-    if not RACING_COM_AVAILABLE: return {"error": "Racing.com scraper not available", "meetings": []}
-    meetings = await racing_com_scraper.scrape_meetings()
-    return {"meetings": meetings, "count": len(meetings)}
+    if not RACING_COM_AVAILABLE:
+        return {"error": "Racing.com scraper not available", "meetings": []}
+    try:
+        meetings = await racing_com_scraper.scrape_meetings()
+        return {"meetings": meetings, "count": len(meetings)}
+    except Exception as e:
+        return {"error": str(e), "meetings": []}
 
 @app.get("/api/racing-com/race-odds")
 async def get_racing_com_race_odds(url: str):
-    if not RACING_COM_AVAILABLE: return {"error": "Racing.com scraper not available"}
-    odds = await racing_com_scraper.scrape_race_odds(url)
-    return odds
+    if not RACING_COM_AVAILABLE:
+        return {"error": "Racing.com scraper not available"}
+    try:
+        odds = await racing_com_scraper.scrape_race_odds(url)
+        return odds
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/api/racing-com/all-odds")
 async def get_racing_com_all_odds():
-    if not RACING_COM_AVAILABLE: return {"error": "Racing.com scraper not available"}
-    all_odds = await racing_com_scraper.scrape_all_odds()
-    return {"odds": all_odds, "race_count": len(all_odds), "last_update": racing_com_scraper.last_update.isoformat() if racing_com_scraper.last_update else None}
+    if not RACING_COM_AVAILABLE:
+        return {"error": "Racing.com scraper not available"}
+    try:
+        all_odds = await racing_com_scraper.scrape_all_odds()
+        return {"odds": all_odds, "race_count": len(all_odds), "last_update": racing_com_scraper.last_update.isoformat() if racing_com_scraper.last_update else None}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/api/racing-com/merged-overlays")
 async def get_racing_com_merged_overlays():
     overlays = agent_state.get("overlays", [])
-    if not RACING_COM_AVAILABLE: return {"error": "Racing.com scraper not available", "overlays": overlays}
-    if not racing_com_scraper.odds_cache or (racing_com_scraper.last_update and (datetime.now() - racing_com_scraper.last_update).seconds > 300):
-        await racing_com_scraper.scrape_all_odds()
-    merged = racing_com_scraper.merge_with_overlays(overlays)
-    return {"overlays": merged, "ai_picks": agent_state.get("ai_picks", []), "last_updated": agent_state.get("last_updated"), "odds_last_update": racing_com_scraper.last_update.isoformat() if racing_com_scraper.last_update else None}
+    if not RACING_COM_AVAILABLE:
+        return {"error": "Racing.com scraper not available", "overlays": overlays}
+    try:
+        if not racing_com_scraper.odds_cache or (racing_com_scraper.last_update and (datetime.now() - racing_com_scraper.last_update).seconds > 300):
+            await racing_com_scraper.scrape_all_odds()
+        merged = racing_com_scraper.merge_with_overlays(overlays)
+        return {"overlays": merged, "ai_picks": agent_state.get("ai_picks", []), "last_updated": agent_state.get("last_updated"), "odds_last_update": racing_com_scraper.last_update.isoformat() if racing_com_scraper.last_update else None}
+    except Exception as e:
+        return {"error": str(e), "overlays": overlays}
 
 @app.get("/api/results")
 async def get_results():
