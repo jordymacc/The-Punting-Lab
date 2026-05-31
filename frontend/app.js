@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
 function connectWebSocket() {
     var protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    var wsUrl = protocol + "//" + API.replace(/^https?:\/\//, "") + "/ws";
+    var wsUrl = protocol + "//" + API_BASE.replace(/^https?:\/\//, "") + "/ws";
     try {
         ws = new WebSocket(wsUrl);
         ws.onopen = function() {
@@ -58,7 +58,7 @@ function connectWebSocket() {
 }
 
 function fetchData() {
-    fetch(API + "/api/overlays")
+    fetch(API_BASE + "/api/overlays")
         .then(function(r) { return r.json(); })
         .then(function(data) {
             allOverlays = data.overlays || [];
@@ -70,12 +70,12 @@ function fetchData() {
         })
         .catch(function() { setStatus("red", "Offline"); });
 
-    fetch(API + "/api/weather")
+    fetch(API_BASE + "/api/weather")
         .then(function(r) { return r.json(); })
         .then(function(d) { renderWeather(d.weather || {}); })
         .catch(function() {});
 
-    fetch(API + "/api/status")
+    fetch(API_BASE + "/api/status")
         .then(function(r) { return r.json(); })
         .then(function(d) {
             document.getElementById("races-count").textContent = d.races_loaded || 0;
@@ -84,7 +84,7 @@ function fetchData() {
 
     loadAccuracy();
 
-    fetch(API + "/api/races")
+    fetch(API_BASE + "/api/races")
         .then(function(r) { return r.json(); })
         .then(function(d) {
             allRaces = d.races || [];
@@ -123,7 +123,7 @@ function applyFilters() {
 }
 
 function loadResultsFromDB() {
-    fetch(API + "/api/results")
+    fetch(API_BASE + "/api/results")
         .then(function(r) { return r.json(); })
         .then(function(data) {
             raceResults = {};
@@ -151,7 +151,7 @@ function submitResult(track, raceNumber) {
 
     raceResults[key] = { winner: winner, second: second, third: third };
 
-    fetch(API + "/api/results", {
+    fetch(API_BASE + "/api/results", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ track: track, race_number: raceNumber, winner: winner, second: second, third: third })
@@ -320,7 +320,7 @@ function populateTrackFilter() {
 }
 
 function loadAccuracy() {
-    fetch(API + "/api/accuracy")
+    fetch(API_BASE + "/api/accuracy")
         .then(function(r) { return r.json(); })
         .then(function(d) {
             var section = document.getElementById("accuracy-section");
