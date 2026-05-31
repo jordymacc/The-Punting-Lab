@@ -57,9 +57,14 @@ manager = ConnectionManager()
 # ── Startup: init DB and load race data ──────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
+    import subprocess
+    try:
+        subprocess.run(["playwright", "install", "chromium"], check=True)
+        print("[Startup] Chromium installed")
+    except Exception as e:
+        print(f"[Startup] Chromium install failed: {e}")
     init_db()
     await refresh_race_data()
-    # Refresh every 10 minutes in background
     asyncio.create_task(background_refresh())
 
 async def background_refresh():
