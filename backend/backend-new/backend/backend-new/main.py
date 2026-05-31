@@ -258,4 +258,9 @@ async def websocket_endpoint(websocket: WebSocket):
         racing_tracker.track_websocket_connection(False)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host=config.HOST, port=config.PORT, reload=config.RELOAD)
+    uvicorn.run(
+        "main:app",
+        host=config.HOST,
+        port=config.PORT,
+        reload=config.RELOAD,
+    )
