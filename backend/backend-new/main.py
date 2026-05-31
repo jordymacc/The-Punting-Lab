@@ -57,25 +57,27 @@ manager = ConnectionManager()
 # ── Startup: init DB and load race data ──────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
+    import subprocess, sys
     try:
-        import subprocess, sys
-        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], 
+                      check=True, timeout=120)
         print("[Startup] Chromium installed")
     except Exception as e:
         print(f"[Startup] Chromium install failed: {e}")
     init_db()
-    await refresh_race_data()
-    asyncio.create_task(background_refresh())
+    asyncio.create_task(background_refresh_delayed())
+    asyncio.create_task(run_initial_refresh())
 
-async def background_refresh():
+async def run_initial_refresh():
+    await asyncio.sleep(2)
+    await refresh_race_data()
+
+async def background_refresh_delayed():
+    await asyncio.sleep(620)
     while True:
-        await asyncio.sleep(600)
         await refresh_race_data()
-        await manager.broadcast({
-            "overlays": cached_overlays,
-            "weather": cached_weather,
-            "last_updated": last_updated,
-        })
+        await manager.broadcast({"overlays": cached_overlays, "weather": cached_weather, "last_updated": last_updated})
+        await asyncio.sleep(600)
 
 async def refresh_race_data():
     global cached_overlays, cached_races, last_updated
