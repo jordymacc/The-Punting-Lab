@@ -79,7 +79,7 @@ async def scrape_live_odds(url: str = "https://www.racing.com/todays-racing") ->
         from playwright.async_api import async_playwright, TimeoutError as PWTimeout
         from bs4 import BeautifulSoup
     except ImportError as e:
-        logger.warning(f"[Odds] Missing dependency: {e}")
+        print(f"[Odds] Missing dependency: {e}")
         return {}
 
     odds_map: Dict[str, dict] = {}
@@ -97,7 +97,7 @@ async def scrape_live_odds(url: str = "https://www.racing.com/todays-racing") ->
             page = await context.new_page()
             await page.add_init_script("Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
 
-            logger.info(f"[Odds] Navigating to {url}")
+            print(f"[Odds] Navigating to {url}")
             try:
                 await page.goto(url, wait_until="networkidle", timeout=30000)
             except PWTimeout:
@@ -118,7 +118,7 @@ async def scrape_live_odds(url: str = "https://www.racing.com/todays-racing") ->
                 try:
                     await page.wait_for_selector(sel, timeout=15000, state="visible")
                     loaded = True
-                    logger.info(f"[Odds] Race cards found with selector: {sel}")
+                    print(f"[Odds] Race cards found with selector: {sel}")
                     break
                 except Exception:
                     continue
@@ -126,14 +126,14 @@ async def scrape_live_odds(url: str = "https://www.racing.com/todays-racing") ->
             try:
                 title = await page.title()
                 html = await page.content()
-                logger.info(f"[Odds] Page title: {title}, length: {len(html)}")
+                print(f"[Odds] Page title: {title}, length: {len(html)}")
                 classes = list(dict.fromkeys(re.findall(r'class="([^"]*?)"', html[:8000])))[:10]
-                logger.info(f"[Odds] Sample classes: {classes}")
+                print(f"[Odds] Sample classes: {classes}")
             except Exception:
                 pass
 
             if not loaded:
-                logger.warning("[Odds] No race cards matched any selector")
+                print("[Odds] No race cards matched any selector")
                 await browser.close()
                 return {}
 
@@ -142,7 +142,7 @@ async def scrape_live_odds(url: str = "https://www.racing.com/todays-racing") ->
             await browser.close()
 
             race_cards = _select_all(soup, SELECTOR_CHAINS["race_cards"])
-            logger.info(f"[Odds] Found {len(race_cards)} race cards")
+            print(f"[Odds] Found {len(race_cards)} race cards")
 
             seen_sigs = set()
             for card in race_cards:
@@ -171,13 +171,13 @@ async def scrape_live_odds(url: str = "https://www.racing.com/todays-racing") ->
                         key = normalise(horse_name)
                         odds_map[key] = {"horse_name": horse_name, "win": win, "place": place, "race_time": race_time}
                     except Exception as e:
-                        logger.debug(f"[Odds] Row parse error: {e}")
+                        print(f"[Odds] Row parse error: {e}")
                         continue
 
-            logger.info(f"[Odds] Scraped odds for {len(odds_map)} runners")
+            print(f"[Odds] Scraped odds for {len(odds_map)} runners")
 
     except Exception as e:
-        logger.error(f"[Odds] Scrape failed: {e}")
+        print(f"[Odds] Scrape failed: {e}")
 
     return odds_map
 
@@ -193,5 +193,5 @@ def inject_odds(races: list, odds_map: Dict[str, dict]) -> list:
                 horse["tote_odds"]  = odds_map[key]["win"]
                 horse["fixed_odds"] = odds_map[key]["win"]
                 matched += 1
-    logger.info(f"[Odds] Injected odds into {matched} horses")
+    print(f"[Odds] Injected odds into {matched} horses")
     return races
