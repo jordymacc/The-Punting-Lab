@@ -47,17 +47,23 @@ active_connections: list[WebSocket] = []
 
 @app.on_event("startup")
 async def startup_event():
-    # Database
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        print(f"⚠️ DB init warning: {e}")
 
-    # Structured logging
-    structlog.configure(
-        processors=[structlog.processors.JSONRenderer()],
-        logger_factory=structlog.stdlib.LoggerFactory(),
-    )
+    try:
+        structlog.configure(
+            processors=[structlog.processors.JSONRenderer()],
+            logger_factory=structlog.stdlib.LoggerFactory(),
+        )
+    except Exception as e:
+        print(f"⚠️ Logging warning: {e}")
 
-    # Start background agents (scraper, weather, overlays, etc.)
-    asyncio.create_task(start_all_agents())
+    try:
+        asyncio.create_task(start_all_agents())
+    except Exception as e:
+        print(f"⚠️ Agents warning: {e}")
 
     print("=" * 60)
     print("🚀  THE PUNTING LAB API v3.0")
@@ -73,9 +79,7 @@ async def root():
     return {
         "message": "🏇 The Punting Lab API v3.0",
         "status": "live",
-        "features": [
-            "overlays", "races", "weather", "results", "ws"
-        ],
+        "features": ["overlays", "races", "weather", "results", "ws"],
         "docs": "/docs",
     }
 
@@ -86,12 +90,11 @@ async def health_check():
 
 
 # ═════════════════════════════════════════════════════════════════
-# CORE API — what the frontend actually calls
+# CORE API
 # ═════════════════════════════════════════════════════════════════
 
 @app.get("/api/overlays")
 async def get_overlays():
-    """Return all overlay-ranked runners + AI consensus picks."""
     return {
         "overlays": agent_state.get("overlays", []),
         "ai_picks": agent_state.get("ai_picks", []),
@@ -101,19 +104,16 @@ async def get_overlays():
 
 @app.get("/api/races")
 async def get_races():
-    """Return raw race fields (with horses)."""
     return {"races": agent_state.get("races", [])}
 
 
 @app.get("/api/weather")
 async def get_weather():
-    """Return latest track weather."""
     return {"weather": agent_state.get("weather", {})}
 
 
 @app.get("/api/status")
 async def get_status():
-    """Quick system status for the frontend header."""
     return {
         "status": agent_state.get("status", "unknown"),
         "races_loaded": len(agent_state.get("races", [])),
@@ -123,12 +123,11 @@ async def get_status():
 
 
 # ═════════════════════════════════════════════════════════════════
-# RESULTS (single + bulk)
+# RESULTS
 # ═════════════════════════════════════════════════════════════════
 
 @app.get("/api/results")
 async def get_results():
-    """Return all entered race results."""
     db = SessionLocal()
     try:
         rows = db.query(RaceResult).order_by(RaceResult.entered_at.desc()).all()
@@ -152,7 +151,6 @@ async def get_results():
 
 @app.post("/api/results")
 async def post_result(data: dict):
-    """Save a single race result."""
     db = SessionLocal()
     try:
         race_id = f"{data['track']}_{data['race_number']}_{datetime.now().strftime('%Y-%m-%d')}"
@@ -184,7 +182,6 @@ async def post_result(data: dict):
 
 @app.post("/api/bulk-results")
 async def post_bulk_results(data: dict):
-    """Save multiple results at once."""
     db = SessionLocal()
     saved = 0
     skipped = 0
@@ -214,11 +211,10 @@ async def post_bulk_results(data: dict):
 
 
 # ═════════════════════════════════════════════════════════════════
-# WEBSOCKET — real-time broadcast
+# WEBSOCKET
 # ═════════════════════════════════════════════════════════════════
 
 async def broadcast(message: dict):
-    """Send JSON to all connected WebSocket clients."""
     dead = []
     for ws in active_connections:
         try:
@@ -235,7 +231,6 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     active_connections.append(websocket)
 
-    # Send current state immediately
     await websocket.send_json({
         "type": "init",
         "races_loaded": len(agent_state.get("races", [])),
@@ -258,7 +253,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 # ═════════════════════════════════════════════════════════════════
-# DASHBOARDS (HTML pages served from same backend)
+# DASHBOARDS
 # ═════════════════════════════════════════════════════════════════
 
 @app.get("/dashboard/strategy", response_class=HTMLResponse)
