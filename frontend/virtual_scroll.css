@@ -1,0 +1,259 @@
+/* Virtual Scroll Container */
+.virtual-scroll-container {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable both-edges; /* Modern browsers - keep scrollbar visible */
+}
+
+/* Virtual Scroll Item (Race Card) */
+.virtual-scroll-item {
+    position: absolute;
+    left: 0;
+    right: 0;
+    will-change: transform;
+    backface-visibility: hidden;
+    transform: translateZ(0); /* Hardware acceleration hint */
+}
+
+/* Race Block Header (inside virtual item) */
+.race-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 8px 0;
+}
+
+.race-block-title {
+    font-size: 15px;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.race-block-meta {
+    font-size: 13px;
+    color: #888;
+    margin-left: 16px;
+}
+
+.race-timer {
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: #2a2d37;
+    color: #fff;
+    min-width: 50px;
+    text-align: center;
+}
+
+/* Timer States */
+.race-timer.live {
+    background: #ef4444;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.race-timer.urgent {
+    background: #f59e0b;
+    color: #fff;
+}
+
+.race-timer.soon {
+    background: #3b82f6;
+    color: #fff;
+}
+
+/* Table Styles */
+.table-wrapper {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.virtual-scroll-item table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.virtual-scroll-item th {
+    background: #2a2d37;
+    color: #888;
+    padding: 8px 6px;
+    text-align: left;
+    font-weight: 500;
+    border-bottom: 1px solid #333;
+}
+
+.virtual-scroll-item th:first-child {
+    width: 40px;
+    text-align: center;
+}
+
+.virtual-scroll-item td {
+    padding: 6px 4px;
+    vertical-align: middle;
+    border-bottom: 1px solid #2a2d37;
+}
+
+/* Rank Badge */
+.rank-badge {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    text-align: center;
+    border-radius: 50%;
+    background: #333;
+    color: #666;
+    font-weight: bold;
+}
+
+.rank-badge.r1 {
+    background: #fbbf24;
+    color: #fff;
+}
+
+.rank-badge.r2 {
+    background: #9ca3af;
+    color: #fff;
+}
+
+.rank-badge.r3 {
+    background: #d1d5db;
+    color: #000;
+}
+
+/* Horse Name */
+.virtual-scroll-item td:nth-child(2) strong {
+    color: #fff;
+}
+
+/* Form String */
+.form-string {
+    font-family: monospace;
+    letter-spacing: 1px;
+}
+
+.form-win {
+    background: #10b981;
+    color: #fff;
+    border-radius: 2px;
+    padding: 0 2px;
+}
+
+.form-place {
+    background: #3b82f6;
+    color: #fff;
+    border-radius: 2px;
+    padding: 0 2px;
+}
+
+.form-miss {
+    background: #4b5563;
+    color: #9ca3af;
+    border-radius: 2px;
+    padding: 0 2px;
+}
+
+/* Stats Classes */
+.stat-high { color: #10b981; }
+.stat-mid { color: #fbbf24; }
+.stat-low { color: #6b7280; }
+
+/* Overlay Score */
+.score-positive { color: #10b981; font-weight: bold; }
+.score-negative { color: #ef4444; }
+
+/* Rating Badge */
+.badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    background: #374151;
+    color: #9ca3af;
+}
+
+.badge.STRONG { background: #10b981; color: #fff; }
+.badge.GOOD { background: #3b82f6; color: #fff; }
+.badge.MARGINAL { background: #f59e0b; color: #fff; }
+
+/* Result Footer */
+.result-display {
+    margin-top: 12px;
+    padding: 12px;
+    background: #1a1d27;
+    border-radius: 6px;
+}
+
+.result-label {
+    font-size: 12px;
+    color: #888;
+    margin-right: 8px;
+}
+
+.result-winner {
+    color: #10b981;
+    font-weight: bold;
+}
+
+/* Result Enter Button */
+.result-enter-btn {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.result-enter-btn:hover {
+    background: #2563eb;
+}
+
+/* Loading State */
+.virtual-scroll-item.loading {
+    opacity: 0.7;
+}
+
+/* Empty State */
+.virtual-scroll-empty {
+    text-align: center;
+    padding: 40px;
+    color: #6b7280;
+}
+
+/* Scrollbar Styling (Webkit browsers) */
+.virtual-scroll-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.virtual-scroll-container::-webkit-scrollbar-track {
+    background: #1a1d27;
+}
+
+.virtual-scroll-container::-webkit-scrollbar-thumb {
+    background: #374151;
+    border-radius: 4px;
+}
+
+.virtual-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: #4b5563;
+}
+
+/* Firefox scrollbar */
+.virtual-scroll-container {
+    scrollbar-width: thin;
+    scrollbar-color: #374151 #1a1d27;
+}

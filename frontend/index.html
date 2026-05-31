@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Horse Racing Overlay</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="virtual_scroll.css"> <!-- Add virtual scroll styles -->
 </head>
 <body>
     <header>
@@ -73,6 +74,7 @@
             </label>
             <button id="refresh-btn" onclick="fetchData()">🔄 Refresh</button>
         </section>
+
         <!-- Model Accuracy -->
         <section class="accuracy-section" id="accuracy-section" style="display:none">
             <h2>📊 Model Accuracy</h2>
@@ -114,15 +116,17 @@
                 </table>
             </div>
         </section>
+
         <!-- Best Bets -->
         <section class="best-bets-section" id="best-bets-section" style="display:none">
             <h2>⭐ Today's Best Bets</h2>
             <div id="best-bets-grid" class="best-bets-grid"></div>
         </section>
-        <!-- Race Cards View -->
+
+        <!-- Race Cards View (Virtual Scroll Container) -->
         <section class="table-section">
             <h2>Runner Rankings</h2>
-            <div id="race-cards-container"></div>
+            <div id="race-cards-container"></div> <!-- Virtual scroll will populate this -->
         </section>
 
         <!-- Weather Section -->
@@ -134,5 +138,5 @@
         </section>
     </main>
 
-    <script src="app.js?v=7"></script>
+    <script src="app.js?v=8"></script> <!-- Updated version -->
 </html>
