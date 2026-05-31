@@ -1,4 +1,4 @@
-const API = "https://punting-lab-backend.onrender.com";
+const API_BASE = 'https://punting-lab-backend.onrender.com';
 let allOverlays = [];
 let allRaces = [];
 let ws = null;
