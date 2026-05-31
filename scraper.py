@@ -1,6 +1,6 @@
 import aiohttp
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 BASE_URL = "https://api.formfav.com"
 API_KEY = "fk_7854bdf2477c56c2f75e453489bd9ee867209c06d00494df960bf4d3d2b65da1"
@@ -14,31 +14,24 @@ async def get_meetings(date: str) -> list:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=HEADERS, params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 if resp.status != 200:
-                    print(f"[Meetings] API error {resp.status}")
+                    print(f"[Meetings] API error {resp.status} for {date}")
                     return []
                 data = await resp.json()
                 meetings = data.get("meetings", [])
                 au_meetings = [m for m in meetings if m and m.get("country") == "au" and not m.get("abandoned")]
-                print(f"[Meetings] Found {len(au_meetings)} AU meetings")
+                print(f"[Meetings] {date}: Found {len(au_meetings)} AU meetings")
                 return au_meetings
     except Exception as e:
-        print(f"[Meetings] Error: {e}")
+        print(f"[Meetings] Error for {date}: {e}")
         return []
 
 async def get_race_form(date: str, track_slug: str, race_number: int) -> dict:
     url = f"{BASE_URL}/v1/form"
-    params = {
-        "date": date,
-        "track": track_slug,
-        "race": str(race_number),
-        "race_code": "gallops",
-        "country": "au"
-    }
+    params = {"date": date, "track": track_slug, "race": str(race_number), "race_code": "gallops", "country": "au"}
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=HEADERS, params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 if resp.status != 200:
-                    print(f"[Form] API error {resp.status} for {track_slug} R{race_number}")
                     return {}
                 data = await resp.json()
                 return data if isinstance(data, dict) else {}
@@ -57,16 +50,13 @@ def parse_form_string(form: str):
 def parse_runners(runners: list, condition: str) -> list:
     horses = []
     for r in runners:
-        if not r or not isinstance(r, dict):
-            continue
-        if r.get("scratched"):
+        if not r or not isinstance(r, dict) or r.get("scratched"):
             continue
         stats = r.get("stats") or {}
         overall = stats.get("overall") or {}
         track_stats = stats.get("track") or {}
         distance_stats = stats.get("distance") or {}
         condition_stats = stats.get("condition") or {}
-
         horses.append({
             "horse_name": r.get("name") or "Unknown",
             "barrier": r.get("barrier") or 0,
@@ -88,100 +78,76 @@ def parse_runners(runners: list, condition: str) -> list:
         })
     return horses
 
-async def get_race_fields() -> list:
-    today = datetime.now().strftime("%Y-%m-%d")
-    print(f"[Scraper] Fetching meetings for {today}")
-
-    meetings = await get_meetings(today)
+async def fetch_races_for_date(date: str) -> list:
+    meetings = await get_meetings(date)
     if not meetings:
-        print("[Scraper] No meetings found, using mock data")
-        return get_mock_races()
-
+        return []
     races = []
     for meeting in meetings:
         if not meeting or not isinstance(meeting, dict):
             continue
-
         slug = meeting.get("slug") or ""
         track = meeting.get("track") or "Unknown"
-        meeting_races = meeting.get("races") or []
-
         if not slug:
             continue
-
-        for race_info in meeting_races:
-            if not race_info or not isinstance(race_info, dict):
+        for race_info in (meeting.get("races") or []):
+            if not race_info or race_info.get("abandoned"):
                 continue
-            if race_info.get("abandoned"):
-                continue
-
             race_number = race_info.get("raceNumber")
             if not race_number:
                 continue
-
             condition = race_info.get("condition") or "Good"
             distance = race_info.get("distance") or "Unknown"
             race_name = race_info.get("raceName") or ""
             start_time = race_info.get("startTime") or ""
-
             try:
                 dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
                 race_time = dt.astimezone().strftime("%H:%M")
             except:
                 race_time = "00:00"
-
-            form_data = await get_race_form(today, slug, race_number)
+            form_data = await get_race_form(date, slug, race_number)
             if not form_data:
-                print(f"[Scraper] No form data for {track} R{race_number}, skipping")
                 continue
-
             runners = form_data.get("runners") or []
-            if not runners:
-                print(f"[Scraper] No runners for {track} R{race_number}, skipping")
-                continue
-
             horses = parse_runners(runners, condition)
             if not horses:
                 continue
-
-            race_id = f"{slug}_{race_number}_{today}"
             races.append({
-                "race_id": race_id,
+                "race_id": f"{slug}_{race_number}_{date}",
                 "track": track,
                 "race_number": race_number,
                 "race_name": race_name,
                 "race_time": race_time,
+                "race_date": date,
                 "distance": distance,
                 "condition": condition,
                 "horses": horses,
             })
-            print(f"[Scraper] Loaded {track} R{race_number} — {len(horses)} runners")
+            print(f"[Scraper] Loaded {track} R{race_number} ({date}) — {len(horses)} runners")
             await asyncio.sleep(0.3)
-
-    if not races:
-        print("[Scraper] No races parsed, using mock data")
-        return get_mock_races()
-
-    print(f"[Scraper] Total: {len(races)} races loaded from FormFav API")
     return races
 
+async def get_race_fields() -> list:
+    today = datetime.now()
+    dates = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(3)]
+    print(f"[Scraper] Fetching races for: {', '.join(dates)}")
+    all_races = []
+    for date in dates:
+        races = await fetch_races_for_date(date)
+        all_races.extend(races)
+        if date != dates[-1]:
+            await asyncio.sleep(1)
+    if not all_races:
+        print("[Scraper] No races found, using mock data")
+        return get_mock_races()
+    print(f"[Scraper] Total: {len(all_races)} races loaded")
+    return all_races
+
 def get_mock_races() -> list:
-    return [{
-        "race_id": "flemington_1_mock",
-        "track": "Flemington",
-        "race_number": 1,
-        "race_name": "Mock Race",
-        "race_time": "12:30",
-        "distance": "1200m",
-        "condition": "Good",
-        "horses": get_mock_horses(),
-    }]
+    return [{"race_id": "flemington_1_mock", "track": "Flemington", "race_number": 1, "race_name": "Mock Race", "race_time": "12:30", "race_date": datetime.now().strftime("%Y-%m-%d"), "distance": "1200m", "condition": "Good", "horses": get_mock_horses()}]
 
 def get_mock_horses() -> list:
     return [
         {"horse_name": "Thunder Strike", "barrier": 1, "jockey": "J. McDonald", "trainer": "C. Waller", "weight": 57.0, "tote_odds": 3.5, "fixed_odds": 3.2, "last_finish": 1, "days_since_last_run": 14, "win_percent": 0.40, "place_percent": 0.70, "track_win_percent": 0.50, "distance_win_percent": 0.45, "condition_win_percent": 0.40, "career_starts": 20, "form_string": "11211", "condition": "Good"},
         {"horse_name": "Silver Arrow", "barrier": 3, "jockey": "D. Oliver", "trainer": "L. Freedman", "weight": 56.5, "tote_odds": 5.0, "fixed_odds": 4.8, "last_finish": 2, "days_since_last_run": 21, "win_percent": 0.30, "place_percent": 0.60, "track_win_percent": 0.35, "distance_win_percent": 0.30, "condition_win_percent": 0.30, "career_starts": 15, "form_string": "21321", "condition": "Good"},
-        {"horse_name": "Golden Star", "barrier": 5, "jockey": "H. Bowman", "trainer": "G. Waterhouse", "weight": 55.0, "tote_odds": 8.0, "fixed_odds": 7.5, "last_finish": 3, "days_since_last_run": 7, "win_percent": 0.20, "place_percent": 0.50, "track_win_percent": 0.25, "distance_win_percent": 0.20, "condition_win_percent": 0.20, "career_starts": 18, "form_string": "32413", "condition": "Good"},
-        {"horse_name": "Dark Knight", "barrier": 7, "jockey": "K. McEvoy", "trainer": "T. Noonan", "weight": 58.0, "tote_odds": 12.0, "fixed_odds": 11.0, "last_finish": 5, "days_since_last_run": 35, "win_percent": 0.15, "place_percent": 0.40, "track_win_percent": 0.10, "distance_win_percent": 0.15, "condition_win_percent": 0.15, "career_starts": 22, "form_string": "54325", "condition": "Good"},
-        {"horse_name": "Storm Chaser", "barrier": 2, "jockey": "R. Mallyon", "trainer": "P. Moody", "weight": 54.5, "tote_odds": 6.5, "fixed_odds": 6.0, "last_finish": 4, "days_since_last_run": 28, "win_percent": 0.25, "place_percent": 0.55, "track_win_percent": 0.30, "distance_win_percent": 0.25, "condition_win_percent": 0.25, "career_starts": 12, "form_string": "43214", "condition": "Good"},
     ]
