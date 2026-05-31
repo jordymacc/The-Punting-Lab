@@ -1,6 +1,0 @@
-racing.db
-*.db
-__pycache__/
-*.pyc
-*.backup
-*.db
