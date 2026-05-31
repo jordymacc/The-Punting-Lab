@@ -54,7 +54,7 @@ def _clean_odds(text: str) -> float:
     except ValueError:
         return 0.0
 
-def _select_first(soup, selectors: List[str]):
+def _select_first(soup, selectors):
     for sel in selectors:
         try:
             el = soup.select_one(sel)
@@ -64,7 +64,7 @@ def _select_first(soup, selectors: List[str]):
             continue
     return None
 
-def _select_all(soup, selectors: List[str]):
+def _select_all(soup, selectors):
     for sel in selectors:
         try:
             els = soup.select(sel)
@@ -103,7 +103,6 @@ async def scrape_live_odds(url: str = "https://www.racing.com/todays-racing") ->
             except PWTimeout:
                 await page.goto(url, wait_until="domcontentloaded", timeout=20000)
 
-            # dismiss cookie banner
             for sel in SELECTOR_CHAINS["cookie_accept"]:
                 try:
                     btn = await page.query_selector(sel)
@@ -114,7 +113,6 @@ async def scrape_live_odds(url: str = "https://www.racing.com/todays-racing") ->
                 except Exception:
                     continue
 
-            # wait up to 15s for any race card selector to appear
             loaded = False
             for sel in SELECTOR_CHAINS["race_cards"]:
                 try:
@@ -125,19 +123,17 @@ async def scrape_live_odds(url: str = "https://www.racing.com/todays-racing") ->
                 except Exception:
                     continue
 
-            # debug output regardless of whether we found cards
             try:
                 title = await page.title()
                 html = await page.content()
                 logger.info(f"[Odds] Page title: {title}, length: {len(html)}")
-                # log first 10 unique class names to help diagnose selector issues
                 classes = list(dict.fromkeys(re.findall(r'class="([^"]*?)"', html[:8000])))[:10]
                 logger.info(f"[Odds] Sample classes: {classes}")
             except Exception:
                 pass
 
             if not loaded:
-                logger.warning("[Odds] No race cards matched any selector — skipping odds scrape")
+                logger.warning("[Odds] No race cards matched any selector")
                 await browser.close()
                 return {}
 
@@ -164,17 +160,14 @@ async def scrape_live_odds(url: str = "https://www.racing.com/todays-racing") ->
                         horse_name = name_el.get_text(strip=True)
                         if not horse_name or horse_name.lower() in ("horse", "runner", "n/a", ""):
                             continue
-
                         sig = hashlib.md5(horse_name.lower().encode()).hexdigest()[:8]
                         if sig in seen_sigs:
                             continue
                         seen_sigs.add(sig)
-
                         win_el   = _select_first(row, SELECTOR_CHAINS["win_odds"])
                         place_el = _select_first(row, SELECTOR_CHAINS["place_odds"])
                         win   = _clean_odds(win_el.get_text(strip=True)   if win_el   else "")
                         place = _clean_odds(place_el.get_text(strip=True) if place_el else "")
-
                         key = normalise(horse_name)
                         odds_map[key] = {"horse_name": horse_name, "win": win, "place": place, "race_time": race_time}
                     except Exception as e:
