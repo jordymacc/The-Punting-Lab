@@ -521,8 +521,3 @@ if __name__ == "__main__":
     )
 '''
 
-with open('/mnt/agents/output/main.py', 'w') as f:
-    f.write(fixed_main_py)
-
-print("✅ Fixed main.py written to /mnt/agents/output/main.py")
-print(f"📄 File size: {len(fixed_main_py)} chars, {len(fixed_main_py.splitlines())} lines")
